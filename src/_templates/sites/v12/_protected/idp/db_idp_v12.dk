@@ -5,7 +5,19 @@ module "Proveedor de Identidades [Id Provider] desde base de datos"
 	#include "cookies.dkl"
     #include "dbr.dkh"
 	
-    dbqname="yourconnection@appgroup"
+    dbqname="" //miconexion@grupoapps
+
+    codeblock
+    {
+        host_name = @@(@http_context,"$request/headers/HTTP_HOST")
+        
+        cfg_name = host_name + ".json"
+        cfg_file = path.concat("_config",cfg_name)
+        if file.exists(cfg_file)
+        {
+            dbqname = trim(@@(from.json(file.rtext(cfg_file)),"$qname"))
+        }
+    }
 
 	//Recuperar sesión del usuario
 	token=auth.token()
@@ -13,10 +25,10 @@ module "Proveedor de Identidades [Id Provider] desde base de datos"
 	if token!=""
 	{
         ref db=dbr.reconnect(dbqname,token)
-	new params
-	{
-		@"ids":token
-	}
+        new params
+        {
+            @"ids":token
+        }
         ref uinfo=dbr.rec(db,"select u.userId, u.userName from tuser u inner join sys_session s on u.sys_pk=s.iuser where s.sys_guid=@ids;",params)
 
         new res
@@ -29,11 +41,7 @@ module "Proveedor de Identidades [Id Provider] desde base de datos"
             @"verified_mobile":@false
         }
 
-        
-        ref lteams=dbr.list(db,"select g.sys_guid group_uuid,groupid, u.userid 
-                            from `user_usergroup_` as ug inner join `usergroup` as g  on ug.groups=g.sys_pk 
-                                inner join tuser as u on ug.users=u.sys_pk 
-                            where u.userid=@uid;",res)
+        ref lteams=dbr.list(db,"select g.sys_guid group_uuid, groupid, u.userid from `user_usergroup_` as ug inner join `usergroup` as g  on ug.groups=g.sys_pk inner join tuser as u on ug.users=u.sys_pk where u.userid=@uid;",res)
         
         res<"memberships*">:record.create()
         res<"memberships/workspaces*">:list.create()
@@ -62,6 +70,24 @@ module "Proveedor de Identidades [Id Provider] desde base de datos"
         exception
         {
             do cookie.set("__induxsoft_token","")
+
+            new idpinfo
+            {
+                @"name":"db_idp_v12"
+                @"qname":dbqname
+                @"database*":@null
+            }
+            @http_context<"session/idp*"> : idpinfo
         }
+    }
+    else 
+    {
+        new idpinfo
+        {
+            @"name":"db_idp_v12"
+            @"qname":dbqname
+            @"database*":@null
+        }
+        @http_context<"session/idp*"> : idpinfo
     }
 }

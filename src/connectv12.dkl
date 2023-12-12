@@ -1,0 +1,31 @@
+#include "dkli.dkh"
+#!
+program "connectv12.dkl"
+{
+    #include "functions.dkh"
+    #include "serialize.dkh"
+    #include "dbr.dkh"
+
+    ref args = commandline("=")
+    
+    host = trim(@@(args,"$host"))
+    qname = trim(@@(args,"$db"))
+    
+    if host == "" { do rise_error(99,'Debe indicar el host de de su sitio. Ej: "host=host.dominio.com"') }
+    if qname == "" { do rise_error(99,'Debe indicar un nombre cualificado de conexión. Ej: "db=miconexion@grupoapps"') }
+    if list.count(split(qname,"@")) != 2 { do rise_error(99,"Nombre cualificado de conexión inválido.") }
+    if not(dba.cnnexists(qname)) { do rise_error(99,"No se encontro el nombre cualificado de conexión proporcionado.") }
+
+    cfg_folder = "_config/"
+    do dir.ensure(cfg_folder)
+
+    cfg_name = host + ".json"
+    cfg_file = path.concat(cfg_folder,cfg_name)
+    if not(file.exists(cfg_file)) { do file.wtext(cfg_file,"{}") }
+
+    ref cfg_data = from.json(file.rtext(cfg_file))
+    cfg_data<"qname"> : qname
+    do file.wtext(cfg_file,to.json(cfg_data))
+
+    do print("Conexión establecida para " + host)
+}

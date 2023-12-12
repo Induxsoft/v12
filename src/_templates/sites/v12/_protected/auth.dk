@@ -9,7 +9,7 @@ program
 	#include "fso/fso.config.dk"
 	#include "fso/fso.dk"
 	
-	@auth.idp=path.concat(@dklfso_protected_dir,"idp/dbidp.dk")
+	@auth.idp=path.concat(@dklfso_protected_dir,"idp/db_idp_v12.dk")
 
 	ref @http_context=@@(@http_request,"&http_context")
 	base_path=field.dstr(@http_request,"base_path","")
