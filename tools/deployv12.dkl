@@ -85,7 +85,7 @@ program "Deployment"
        
     }
 
-    @source_url="https://win.induxsoft.net/catalog/v12/"
+    @source_url="https://install-v12.induxsoft.net/"
     @cat_file="catalog.json"
     @file_ext=".zip"
 
