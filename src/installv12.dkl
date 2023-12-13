@@ -1,0 +1,102 @@
+#include "dkli.dkh"
+#!
+program "InstallV12"
+{
+    #include "functions.dkh"
+    #include "serialize.dkh"
+
+    print_error::err
+    {
+        do print("")
+        do print("-  ERROR -")
+        do print(err)
+        do print("------------------------------------------------------------")
+        do print("")
+        do print("- USO DE LA HERRAMIENTA -")
+        do print('./dkl installv12 "db=qname" "packs=paquete1,...paqueteN"')
+        do print("Donde:")
+        do print("\t paquete1...paqueteN=Son nombres carpetas de paquetes desplegados")
+        do print("\t db=Un nombre cualificado de conexión a una base de datos existente")
+        do print("")
+        do print('* Use comillas dobles " para encerrar los argumentos *')
+        do print("")
+        do print("Ejemplo:")
+        do print('\t./dkl install12 "db=mibd@v12" "packs=core, cxp, cxc, inventario"')
+        do print("")
+        do print("------------------------------------------------------------")
+    }
+
+    is_inlist::&lista,clave
+    {
+        for i=0;i<@count(lista)
+        {
+            if tolower(trim(clave))==tolower(trim(list.str(lista,i))) { return @true }
+        }
+        return @false
+    }
+
+    installer_list::source,install_folder, install_program,&lista
+    {
+        install_path=path.concat(source,install_folder)
+        
+        if dir.exists(install_path)
+        {
+            install_file=path.concat(install_path,install_program)
+            if file.exists(install_file)
+            {
+                if not(is_inlist(lista,install_file)) { do list.add(lista,install_file)}
+            }
+        }
+        ref dirs=list.dirs(source)
+
+        for i=0;i<@count(dirs)
+        {
+            install_path=path.concat(list.str(dirs,i),install_folder)
+            if dir.exists(install_path)
+            {
+                install_file=path.concat(install_path,install_program)
+                if file.exists(install_file)
+                {
+                    if not(is_inlist(lista,install_file)) { do list.add(lista,install_file)}
+                }
+            }
+        }
+        
+    }
+
+    @install_program="install.dkl"
+    @install_folder="_install"
+
+    ref args=commandline("=")
+    if trim(@@(args,"$db"))=="" { do rise_error(0,"Falta el argumento 'db'.")}
+    if trim(@@(args,"$packs"))=="" { do rise_error(0,"Falta el argumento 'packs'.")}
+    ref packs=split(@@(args,"$packs"),",")
+
+    if trim(@@(args,"$prg"))!="" { @install_program=trim(@@(args,"$prg"))}
+    if trim(@@(args,"$fld"))!="" { @install_folder=trim(@@(args,"$fld"))}
+
+    ref lista_programas=list.create()
+
+    for i=0;i<@count(packs)
+    {
+        pack=trim(list.str(packs,i))
+        
+        do installer_list(pack,@install_folder,@install_program,lista_programas)
+    }
+
+    do print("")
+    for i=0;i<@count(lista_programas)
+    {
+        file=list.str(lista_programas,i)
+        do print(file)
+        do print("===================================")
+        do runscript(file,"_run_settings",@_run_settings)
+        do print("")
+    }
+
+    
+    exception
+    {
+        do print_error(last_error())
+    }
+}
