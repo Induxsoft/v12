@@ -27,11 +27,11 @@ program "Deployment"
         do print('\t./dkl deployv12 "packs:core, cxp, cxc, inventario"')
         do print("")
         do print("Opcionalmente puede indicar también los argumentos:")
-        do print("\tfrom:<url_de_repositorio>")
+        do print("\tfrom:<url_de_repositorio>/ (Siempre termine la url con /)")
         do print("\tcat:<nombre del archivo de catálogo>")
         do print("")
         do print("Ejemplo:")
-        do print('\t./dkl deployv12 "packs:core, cxp, cxc, inventario" "from:https://install-v12.induxsoft.net" "cat:catalog.json"')
+        do print('\t./dkl deployv12 "packs:core, cxp, cxc, inventario" "from:https://install-v12.induxsoft.net/" "cat:catalog.json"')
         do print("------------------------------------------------------------")
     }
 
