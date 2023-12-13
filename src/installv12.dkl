@@ -88,6 +88,7 @@ program "InstallV12"
     for i=0;i<@count(lista_programas)
     {
         file=list.str(lista_programas,i)
+        do _set(@_run_settings,"SourceCodeFile",file)
         do print(file)
         do print("===================================")
         do runscript(file,"_run_settings",@_run_settings)
