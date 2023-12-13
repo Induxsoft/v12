@@ -1,0 +1,125 @@
+#include "dkli.dkh"
+#!
+program "Deployment"
+{
+    #include "functions.dkh"
+    #include "serialize.dkh"
+    #include "webcl.dkh"
+
+    ref @zip_assembly = _import_library("System.IO.Compression.ZipFile.dll")
+    do _map_function(@zip_assembly, "System.IO.Compression.ZipFile", "ExtractToDirectory", "unzip","System.String, System.String, System.Boolean","void") 
+
+    print_error::err
+    {
+        do print("")
+        do print("-  ERROR -")
+        do print(err)
+        do print("------------------------------------------------------------")
+        do print("")
+        do print("- USO DE LA HERRAMIENTA -")
+        do print('./dkl deployv12 "packs:paquete1,...paqueteN"')
+        do print("Donde:")
+        do print("\t paquete1...paqueteN=Son nombres de paquetes a desplegar")
+        do print("")
+        do print('* Use comillas dobles " para encerrar los argumentos *')
+        do print("")
+        do print("Ejemplo:")
+        do print('\t./dkl deployv12 "packs:core, cxp, cxc, inventario"')
+        do print("")
+        do print("Opcionalmente puede indicar también los argumentos:")
+        do print("\tfrom:<url_de_repositorio>")
+        do print("\tcat:<nombre del archivo de catálogo>")
+        do print("")
+        do print("Ejemplo:")
+        do print('\t./dkl deployv12 "packs:core, cxp, cxc, inventario" "from:https://install-v12.induxsoft.net" "cat:catalog.json"')
+        do print("------------------------------------------------------------")
+    }
+
+    is_inlist::&lista,clave
+    {
+        for i=0;i<@count(lista)
+        {
+            if tolower(trim(clave))==tolower(trim(list.str(lista,i))) { return @true }
+        }
+        return @false
+    }
+
+    @max_deep_recursive=30
+    @iterations=0
+
+    generar_lista::&packs,&catalog,&lista
+    {
+        @iterations=@iterations+1
+        if @iterations>@max_deep_recursive { return }
+
+        ref n_packs=list.create()
+        
+        for i=0;i<@count(packs)
+        {
+            pack=tolower(trim(list.str(packs,i)))
+            if pack!=""
+            {
+                ref components=@@(catalog,"&"+pack)
+                if isnull(components)
+                {
+                    //No está en el catálogo
+                    if file.extension(pack)=="" { pack=pack+@file_ext}
+                    if not(is_inlist(lista,@source_url+pack))
+                    {
+                        do list.add(lista,@source_url+pack)
+                    }
+                }
+                else
+                {
+                    for j=0;j<@count(components)
+                    {
+                        comp=trim(list.str(components,j))
+                        do list.add(n_packs,comp)
+                    }
+                    if @count(n_packs)>0{ do generar_lista(n_packs,catalog,lista) }
+                    do list.clear(n_packs)
+                }
+            }
+        }
+        
+       
+    }
+
+    @source_url="https://win.induxsoft.net/catalog/v12/"
+    @cat_file="catalog.json"
+    @file_ext=".zip"
+
+    ref args=commandline(":")
+    if trim(@@(args,"$packs"))=="" { do rise_error(0,"Falta el argumento 'packs' con la lista de paquetes a descargar.")}
+    ref packs=split(@@(args,"$packs"),",")
+
+    if trim(@@(args,"$from"))!="" { @source_url=trim(@@(args,"$from")) }
+    if trim(@@(args,"$cat"))!="" { @cat_file=trim(@@(args,"$cat")) }
+
+    //Descargar el archivo de catálogo
+    ref catalog=from.json(http.get(@source_url+@cat_file))
+
+    //Crear lista de descargas
+    ref lista=list.create()
+    
+    do generar_lista(packs,catalog,lista)
+    
+    //Descargar, descomprimir y eliminar archivo zip
+    for i=0;i<@count(lista)
+    {
+        url=list.str(lista,i)
+        temp_file=uuid()+".zip"
+        do print ("Descargando: "+file.justname(url)+"...")
+        do http.download(url,temp_file)
+        do print("Descargado.")
+        do print("Descomprimiendo...")
+        do unzip(temp_file,"./",@true)
+        do print("Desplegado.")
+        do file.delete(temp_file)
+        do print("")
+    }
+    exception
+    {
+        do print_error(last_error())
+    }
+}
