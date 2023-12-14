@@ -10,3 +10,4 @@
 *: /$/{_pack}/{_resource} > ${_pack}/_static/{_resource}
 
 *: / > $webshell/index.dkl
+*: /webshell/frontpage.dkl > $webshell/frontpage.dkl
