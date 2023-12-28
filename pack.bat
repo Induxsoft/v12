@@ -16,6 +16,7 @@ mkdir %1
 "C:\Program Files\7-Zip\7z.exe" a -r %1\pregop.zip ..\gop\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\mpi.zip ..\mpi\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\catbas.zip ..\catbas\src\*
+"C:\Program Files\7-Zip\7z.exe" a -r %1\sigesac.zip ..\sigesac\src\*
 GOTO EOF
 
 :ERROR1
