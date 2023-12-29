@@ -4,3 +4,7 @@
 .text-logo {
     font-weight: 600;
 }
+@media print
+{
+    .no-print{ display: none !important; }
+}
