@@ -7,4 +7,5 @@
 @media print
 {
     .no-print{ display: none !important; }
+    #list_table_container { overflow: visible !important; max-height: none !important; }
 }
