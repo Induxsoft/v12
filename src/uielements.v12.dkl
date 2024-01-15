@@ -7,7 +7,7 @@ module
     #include "uielements.dbtable.dkl"
     #include "serialize.dkh"
 
-    function uie.dbeditable(&table_definition)
+    function uie.dbeditable(&table_definition, table_id)
     {
         ref datatable = @@(table_definition, "&datatable")
         ref columns = @@(table_definition, "&columns")
@@ -18,7 +18,7 @@ module
         {
             div(style="overflow-y:auto;max-height: #<tableHeight>;" id="list_table_container")
             {
-                "edit-table"(style="width: 100%;" "hidde-selector"="true" data='#<to.json(datatable)>')
+                "edit-table"(style="width: 100%;" "hidde-selector"="true" data='#<to.json(datatable)>' id="#<table_id>")
                 {
                     "edit-thead"
                     {
