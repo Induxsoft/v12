@@ -18,6 +18,7 @@ mkdir %1
 "C:\Program Files\7-Zip\7z.exe" a -r %1\catbas.zip ..\catbas\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\efectivo.zip ..\efectivo\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\rhgf.zip ..\rhgf\src\*
+"C:\Program Files\7-Zip\7z.exe" a -r %1\recurent.zip ..\recurent\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\sigesac.zip ..\sigesac\src\*
 
 GOTO EOF
