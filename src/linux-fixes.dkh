@@ -1,0 +1,29 @@
+#!
+module "Linux-Fixes"
+{
+	ref @lib_fixes=_import_library("LinuxFixes.dll")
+
+	do _map_function(@lib_fixes,"LinuxFixes.File","WriteAllTextUTF8","WriteAllText","System.String,System.String,System.Boolean","void")
+	do _map_function(@lib_fixes,"LinuxFixes.File","WriteBytesAll","_WriteAllBytes","System.String,*System.Byte[]","void")
+
+	file.wtext::path,content
+	{
+		do WriteAllText(path,content,@true)
+	}
+	_file.wtext::path,content
+	{
+		do WriteAllText(path,content,@true)
+	}
+	file.wtext_utf8::path,content,bom
+	{
+		do WriteAllText(path,content,bom)
+	}
+	file.wbytes::path,&bytes
+	{
+		do _WriteAllBytes(path,bytes)
+	}
+	_file.wbytes::path,&bytes
+	{
+		do _WriteAllBytes(path,bytes)
+	}
+}
