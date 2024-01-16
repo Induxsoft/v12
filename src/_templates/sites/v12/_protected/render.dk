@@ -4,6 +4,33 @@ module ""
 {
     #include "functions.dkh"
 
+    factoryseal::
+	{
+		//Inserta información de la vista al pie
+		pack=@@(@http_context,"$request/get/_pack")
+		program=@@(@http_context,"$request/get/_program")
+		view=@@(@http_context,"$request/get/_view")
+		
+		if view==""
+		{
+			if @@(@http_context,"$request/get/_entity_id")=="" { view="list" }
+			else if @@(@http_context,"$request/get/_entity_id")=="_new" { view="form new" }
+			else { view="form" }
+		}
+		strseal=pack+"/"+program+"/"+view
+		strseal=replace(strseal,"///","")
+		strseal=trim(replace(strseal,"//",""))
+		
+		if strseal!=""
+		{
+			strseal='<div class="container-fluid text-center"><small class="text-secondary">'+strseal+'</small></div>'
+		}
+		
+		return strseal
+		
+		exception { return ""}
+	}
+
     if not(contains(@@(@http_context,"$request/headers/http_accept"),"html")) { return }
     template='<!DOCTYPE html>
     <html>
@@ -68,6 +95,7 @@ module ""
             #<@@(@http_context,"$session/resource/properties/web_page/start_body")>
             #<@content>
             #<@@(@http_context,"$session/resource/properties/web_page/end_body")>
+            #<factoryseal()>
         </body>
     </html>'
 
