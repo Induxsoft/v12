@@ -216,6 +216,7 @@ class InputKey extends HTMLElement
     accept_footer_container2 = null;
     change_event = null;
     onBeforeSearch = null;
+    buttonElements = [];
 
     constructor() 
     {
@@ -268,6 +269,16 @@ class InputKey extends HTMLElement
             search_container.appendChild(this.input_search_container);
             search_container.appendChild(button_search_container);
             description_container.appendChild(this.input_description_container);
+
+            // BOTONES ADICIONALES
+            if (this.hasAttribute('buttons'))
+                this._createOtherButtons();
+
+            this.buttonElements.forEach(btn=>{
+                description_container.appendChild(btn);
+                this._setOtherButtonsEvents(btn);
+            });
+
             if (this.getAttribute('add-url')) description_container.appendChild(button_add_container);
             if (this.getAttribute('edit-url')) description_container.appendChild(button_edit_container);
             description_container.appendChild(button_clear_container);
@@ -531,7 +542,8 @@ class InputKey extends HTMLElement
             shadow.appendChild(this.container2);
             shadow.appendChild(container3);
             shadow.appendChild(container4);
-            this.after(this.inputv);
+            
+            if (this._parseBool((this.getAttribute('hidden-input')??''), true)) this.after(this.inputv);
 
             if (this.hasAttribute('data-value'))
             {
@@ -549,11 +561,12 @@ class InputKey extends HTMLElement
      * @param {object} attributes Objeto que representan los atributos del elemento, ej: {id:'miElement',class:'mi-element'}
      * @returns Retorna un **nuevo elemento HTML**
      */
-    createFullElement(tagName="div", attributes={})
+    createFullElement(tagName="div", attributes={}, innerHTML="")
     {
         const elem = document.createElement(tagName);
         const keys = Object.keys(attributes);
         keys.forEach(key => elem.setAttribute(key, attributes[key]));
+        if (innerHTML) elem.innerHTML = innerHTML;
         return elem;
     }
     /**
@@ -859,6 +872,36 @@ class InputKey extends HTMLElement
     {
         this.input_search_container.value = text;
         this._search(autoselect);
+    }
+    _parseBool=(value, _default = false)=>
+    {
+        if (value) return (value.toString().toLowerCase() === 'true');
+        return _default;
+    }
+    _createOtherButtons()
+    {
+        this.buttonElements = [];
+        if (this.getAttribute('buttons') != '')
+        {
+            let buttonList = [];
+            try { buttonList = JSON.parse(this.getAttribute('buttons')); }
+            catch{ alert('El valor del atributo "buttons" tiene un formato JSON inválido'); }
+
+            buttonList.forEach((obj,i) => {
+                const btn = {
+                    type:'button', 
+                    class:'induxsoft-buttons',
+                    id: (obj.id ?? 'btn_ik_'+i)
+                }
+                this.buttonElements.push(this.createFullElement('button', btn, (obj.content??'')));
+            });
+        }
+    }
+    _setOtherButtonsEvents(button)
+    {
+        const externalBtn = this.createFullElement('button', { type:'button', style:"display:none !important;", id:button.id });
+        this.after(externalBtn);
+        button.onclick = e => externalBtn.click();
     }
 }
 
@@ -1859,6 +1902,12 @@ class DateRange extends HTMLElement
     _iptEnd = null;
     _hiddenInputStr = null;
     _hiddenInputEnd = null;
+    _contnr = null;
+    _dateContainer = null;
+    _btnEdit = null;
+    _btnDone = null;
+    _btnUndo = null;
+    onChanging = null;
 
     constructor() 
     {
@@ -1882,34 +1931,68 @@ class DateRange extends HTMLElement
         document.addEventListener('DOMContentLoaded', () => 
         {
             const shadow = this.attachShadow({ mode: 'closed' });
-            const contnr = this._createFullElement('div', { id:'DateRange_contnr', class:'w-100 d-flex gap-2 align-items-center justify-content-center'});
+            this._contnr = this._createFullElement('div', { id:'DateRange_contnr', class:'w-100 d-flex border'});
             
-            const cntnr1 = this._createFullElement('div', { id:'DateRange_cntnr1', class:'w-100 d-flex wrap' });
-            const lblStr = this._createFullElement('span', { id:'DateRange_lblStr', class:'induxsoft-form-label text-secondary'});
-            this._iptStr = this._createFullElement('input', { type:'date', id:'DateRange_iptStr', class:'induxsoft-form-control' });
-            lblStr.textContent = 'Fecha inicial:';
+            this._dateContainer = this._createFullElement('div', { class: "grow-1 d-flex flex-wrap gap-2 align-items-center gap-2 ps-2 wrap" })
+            const cntnr1 = this._createFullElement('div', { id: 'DateRange_cntnr1', class:'d-flex wrap align-items-center' });
+            const lblStr = this._createFullElement('span', { id:'DateRange_lblStr', class:'induxsoft-form-label text-secondary m-0'});
+            this._iptStr = this._createFullElement('input', { type: 'date', id: 'DateRange_iptStr', class:'induxsoft-form-control input-date' });
+
+            if (((this.getAttribute('hide-labels')??'') === 'true'))
+            {
+                this.setAttribute("start-label","");
+                this.setAttribute("end-label","");
+            }
+
+            lblStr.textContent = this.hasAttribute("start-label") ?  this.getAttribute("start-label") : "Desde:";
             cntnr1.appendChild(lblStr);
             cntnr1.appendChild(this._iptStr);
-            contnr.appendChild(cntnr1);
+            this._dateContainer.appendChild(cntnr1);
 
-            const cntnr2 = this._createFullElement('div', { id:'DateRange_cntnr2', class:'w-100 d-flex wrap' });
-            const lblEnd = this._createFullElement('span', { id:'DateRange_lblEnd', class:'induxsoft-form-label text-secondary'});
-            this._iptEnd = this._createFullElement('input', { type:'date', id:'DateRange_iptEnd', class:'induxsoft-form-control' });
-            lblEnd.textContent = 'Fecha final:';
+            const cntnr2 = this._createFullElement('div', { id:'DateRange_cntnr2', class:'d-flex wrap align-items-center' });
+            const lblEnd = this._createFullElement('span', { id:'DateRange_lblEnd', class:'induxsoft-form-label text-secondary m-0'});
+            this._iptEnd = this._createFullElement('input', { type: 'date', id: 'DateRange_iptEnd', class:'induxsoft-form-control input-date' });
+            lblEnd.textContent = this.hasAttribute("end-label") ?  this.getAttribute("end-label") : "Hasta:";
             cntnr2.appendChild(lblEnd);
             cntnr2.appendChild(this._iptEnd);
-            contnr.appendChild(cntnr2);
+            this._dateContainer.appendChild(cntnr2);
 
-            this._iptStr.toggleAttribute('disabled', ((this.getAttribute('disabled')??'') === 'true'));
-            this._iptEnd.toggleAttribute('disabled', ((this.getAttribute('disabled')??'') === 'true'));
+            this._contnr.appendChild(this._dateContainer);
 
-            this._iptStr.addEventListener('change', () => {
-                this.data.start = this._iptStr.value;
-                this._refreshDates();
+            const controlsContainer = this._createFullElement('div', { class: 'd-flex' });
+            this._btnEdit = this._createFullElement('button', { id: 'SafeInput_btnEdit', title: 'Edit', class: 'induxsoft-buttons d-flex justify-content-center align-items-center' });
+            this._btnDone = this._createFullElement('button', { id: 'SafeInput_btnDone', title: 'Save', class: 'd-none induxsoft-buttons d-flex justify-content-center align-items-center' });
+            this._btnUndo = this._createFullElement('button', { id: 'SafeInput_btnUndo', title: 'Cancel', class: 'd-none induxsoft-buttons d-flex justify-content-center align-items-center' });
+
+            this._btnEdit.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-pencil" viewBox="0 0 16 16"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/></svg>`;
+            this._btnDone.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-check2" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>`;
+            this._btnUndo.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/></svg>`;
+            this._btnEdit.classList.toggle('disable-element', ((this.getAttribute('disabled') ?? '') === 'true'));
+
+            controlsContainer.appendChild(this._btnEdit);
+            controlsContainer.appendChild(this._btnDone);
+            controlsContainer.appendChild(this._btnUndo);
+
+            this._contnr.appendChild(controlsContainer);
+
+            this._btnEdit.addEventListener('click', () => {
+                this._startEdit();
+                this._showControlButtons(true);
+                this._iptStr.focus();
             });
-            this._iptEnd.addEventListener('change', () => {
-                this.data.end = this._iptEnd.value;
-                this._refreshDates();
+            this._btnDone.addEventListener('click', async () => {
+                this._confirmEdit();
+            });
+            this._btnUndo.addEventListener('click', () => {
+                this._cancelEdit();
+                this._showControlButtons(false);
+            });
+
+            this._iptStr.addEventListener('keyup', (e) => {
+                if (e.key === 'Enter') this._iptEnd.focus();
+            });
+            this._iptEnd.addEventListener('keyup', (e) => {
+                if (e.key === 'Enter') this._btnDone.focus();
             });
 
             const MO = new MutationObserver(()=>{
@@ -1925,7 +2008,7 @@ class DateRange extends HTMLElement
             shadow.innerHTML = `
                 <style>
                     *{ box-sizing: border-box;margin:0;padding:0; }
-                    .d-flex{ display:flex; }
+                    .d-flex{ display:flex; } .d-none{ display: none !important; }
                     .wrap{ flex-wrap: wrap; }
                     .gap-1{gap:4px;} .gap-2{gap:8px;}
                     .justify-content-start{ justify-content: start; } .justify-content-center{ justify-content: center; } .justify-content-end{ justify-content: end; }
@@ -1933,10 +2016,32 @@ class DateRange extends HTMLElement
                     .grow-1{ flex-grow: 1; }
                     .w-100{ width: 100%; }
                     .text-secondary{ color: #888; }
+                    .m-0{ margin: 0 !important; }
+                    .border{ border: 1px solid #ced4da; }
+                    .ps-1 { padding-left: 4px; } .ps-2 { padding-left: 8px; }
+                    .disabled { background-color: #E9ECEF; }
+                    .disable-element{ pointer-events: none; background-color: #e9ecef !important; opacity: 1;}
+                    .waiting{ pointer-events: none; opacity: .5; cursor: progress; }
 
                     .induxsoft-form-control{ border: none; outline: 1px solid #ced4da; display: block; width: 100%; padding: 0.375rem 0.75rem !important; font-size: 1rem; font-weight: 400; line-height: 1.5; color: #212529; background-color: #fff; background-clip: padding-box; appearance: none; transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
                     .induxsoft-form-control:disabled, .induxsoft-form-control[readonly] { background-color: #e9ecef; opacity: 1; }
                     .induxsoft-form-label{ margin-bottom: 0.5rem; }
+                    .induxsoft-buttons{ font-weight: 400;line-height: 1.5;color: #212529;text-align: center;text-decoration: none;vertical-align: middle;cursor: pointer;-webkit-user-select: none;-moz-user-select: none;user-select: none;background-color: #FFF;outline:1px solid #ced4da;border: none;padding: 0.375rem 0.75rem;font-size: 1rem;transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
+                    .induxsoft-buttons:hover{ color: #212529;background-color: #F5F5F5; }
+
+                    .input-date{
+                        border: none;
+                        outline: none;
+                        text-align: end;
+                        border-bottom: 1px solid transparent;
+                        width: min-content !important;
+                        font-size: .9rem;
+                        padding-left: 0 !important;
+                        padding-right: 0 !important;
+                    }
+                    .input-date:focus{
+                        border-bottom: 1px solid #005CC8;
+                    }
                 </style>
             `
 
@@ -1966,8 +2071,8 @@ class DateRange extends HTMLElement
                 this._hiddenInputStr = this._createFullElement('input', { type:'hidden', name:this.getAttribute('hidden-input-name-start').trim() });
                 this.after(this._hiddenInputStr);
             }
-
-            shadow.appendChild(contnr);
+            this._showControlButtons(false);
+            shadow.appendChild(this._contnr);
             this._refreshDates();
         });
     }
@@ -2003,6 +2108,16 @@ class DateRange extends HTMLElement
 
         if (this.onChange) this.onChange(this.data);
     }
+    
+    // get disabled()
+    // {
+    //     return ((this.getAttribute('disabled')??'') === 'true');
+    // }
+    // set disabled(value)
+    // {
+    //     this.setAttribute('disabled',value);
+    // }
+
     setData=(obj)=>
     {
         this.data = obj;
@@ -2011,6 +2126,53 @@ class DateRange extends HTMLElement
     getData=()=>
     {
         return this.data;
+    }
+    _showControlButtons = (edit = false) => {
+        this._btnEdit.classList.toggle('d-none', edit);
+        this._btnDone.classList.toggle('d-none', !edit);
+        this._btnUndo.classList.toggle('d-none', !edit);
+        this._iptStr.toggleAttribute('disabled', !edit);
+        this._iptEnd.toggleAttribute('disabled', !edit);
+        this._dateContainer.classList.toggle('disabled', !edit);
+    }
+    _startEdit = () => {
+        this._tempValue = {
+            start: this._iptStr.value,
+            end: this._iptEnd.value,
+        }
+    }
+    _cancelEdit = () => {
+        this._iptStr.value = this._tempValue.start;
+        this._iptEnd.value = this._tempValue.end;
+        if (this._hiddenInputEnd) { this._hiddenInputEnd.value = this._tempValue.end }
+        if (this._hiddenInputStr) { this._hiddenInputStr.value = this._tempValue.start }
+    }
+    _confirmEdit = async () => {
+        this._contnr.classList.add('waiting');
+        this.style.cursor = 'progress';
+        let newValue = {
+            start: this._iptStr.value,
+            end: this._iptEnd.value,
+        }
+        let res = await this._cancelChange(newValue);
+        if (res) {
+            this._cancelEdit();
+        }
+        else {
+            this._showControlButtons(false);
+            if (this._hiddenInputEnd) this._hiddenInputEnd.value = newValue.end;
+            if (this._hiddenInputStr) this._hiddenInputStr.value = newValue.start;
+        }
+        this._contnr.classList.remove('waiting');
+        this.style.cursor = 'initial';
+    }
+    _cancelChange = async (newValue) => {
+        return new Promise(resolve => {
+            if (this.onChanging)
+                resolve(this.onChanging(this._tempValue, newValue));
+            else
+                resolve(false);
+        });
     }
 }
 
@@ -2066,6 +2228,7 @@ class SafeInput extends HTMLElement
             this._btnEdit.addEventListener('click', () => {
                 this._startEdit();
                 this._showControlButtons(true);
+                this._inputSf.select();
             });
             this._inputSf.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter')
@@ -2118,7 +2281,6 @@ class SafeInput extends HTMLElement
             contanr.appendChild(this._btnEdit);
             contanr.appendChild(this._btnDone);
             contanr.appendChild(this._btnUndo);
-
             shadow.appendChild(contanr);
         });
     }
@@ -2629,6 +2791,473 @@ class MediaList extends HTMLElement
     }
 }
 
+class FilterText extends HTMLElement
+{
+    attributes = null;
+
+    constructor() {
+        super();
+        document.addEventListener('DOMContentLoaded', () => this.attributes = this.getAttributeNames());
+    }
+    static get observedAttributes() {
+        return attributes;
+    }
+    attributeChangeCallback(property, oldValue, newValue) {
+        if (newValue === oldValue) return;
+        this[property] = newValue;
+    }
+    connectedCallback()
+    {
+        document.addEventListener('DOMContentLoaded', () =>
+        {
+            const shadow = this.attachShadow({ mode: 'closed' });
+            this._writeStyles(shadow);
+            
+            let text_field = ((this.getAttribute('text-field')??'').trim() != '' ? this.getAttribute('text-field') : 's');
+            let placeholder = (this.getAttribute('placeholder') ?? 'Buscar');
+            let icon_filter = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-funnel" viewBox="0 0 16 16"><path d = "M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5zm1 .5v1.308l4.372 4.858A.5.5 0 0 1 7 8.5v5.306l2-.666V8.5a.5.5 0 0 1 .128-.334L13.5 3.308V2z"/></svg>'
+            let icon_cancel = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"><path d="M0 0H24V24H0z" fill="none"/><path d="M6.929.515L21.07 14.657l-1.414 1.414-3.823-3.822L15 13.5V22H9v-8.5L4 6H3V4h4.585l-2.07-2.071L6.929.515zM9.585 6H6.404L11 12.894V20h2v-7.106l1.392-2.087L9.585 6zM21 4v2h-1l-1.915 2.872-1.442-1.443L17.596 6h-2.383l-2-2H21z"/></svg>'
+
+            const container = this._createFullElement('div', { class: 'd-flex' });
+            const div_search = this._createFullElement('div', { class:'grow-1 p-relative d-flex' })
+            const ipt_search = this._createFullElement('input', { class: 'induxsoft-form-control', placeholder: placeholder });
+            const btn_search = this._createFullElement('button', { class: 'induxsoft-buttons button-icon' });
+            const div_hidden = this._createFullElement('div', { class:'div-hidden' })
+            
+            div_search.appendChild(ipt_search);
+            div_search.appendChild(div_hidden);
+            container.appendChild(div_search);
+            container.appendChild(btn_search);
+
+            const ipt_hidden = this._createFullElement('input', { type: "hidden", name: text_field });
+
+            let value = (this.getAttribute('value') ?? '').trim();
+            if (value == '' && (this.getAttribute('url-parse') ?? 'false') == 'true')
+                value = (this._getURLParam('s') ?? '');
+
+            ipt_search.value = value;
+            ipt_hidden.value = ipt_search.value;
+
+            const disable_input = (disable = true) =>
+            {
+                ipt_search.disabled = disable;
+                btn_search.type = (disable ? 'button' : 'submit');
+                btn_search.innerHTML = (disable ? icon_cancel : icon_filter);
+                div_hidden.classList.toggle('d-none', !disable);
+            }
+
+            let disable = (ipt_search.value.trim() != '');
+            disable_input(disable);
+            div_hidden.addEventListener('click', (e) => {
+                disable_input(false);
+                ipt_search.select();
+            });
+            ipt_search.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" && ipt_search.value.trim() != "") {
+                    if ((this.getAttribute('auto-submit') ?? 'false') == 'true') this._submitFilter(ipt_search, ipt_hidden);
+                    else disable_input(true);
+                } 
+            });
+            btn_search.addEventListener("click", (event) => {
+                event.preventDefault();
+                if (btn_search.type == "submit") {
+                    if (ipt_search.value.trim() != "") this._submitFilter(ipt_search, ipt_hidden);
+                }
+                else
+                {
+                    disable_input(false);
+                    ipt_search.select();
+                }
+            });
+
+            shadow.appendChild(container);
+            this.after(ipt_hidden);
+        });
+    }
+    _writeStyles(shadow)
+    {
+        shadow.innerHTML = `
+            <style>
+                .d-flex{ display: flex; }
+                .d-none{ display: none !important; }
+                .grow-1{ flex-grow: 1; }
+                .p-relative{ position: relative; }
+                .induxsoft-form-control{ border: none; outline: 1px solid #ced4da; display: block; width: 100%; padding: 0.375rem 0.75rem !important; font-size: 1rem; font-weight: 400; line-height: 1.5; color: #212529; background-color: #fff; background-clip: padding-box; appearance: none; transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
+                .induxsoft-form-control:disabled, .induxsoft-form-control[readonly] { background-color: #e9ecef; opacity: 1; }
+                .induxsoft-buttons{ font-weight: 400;line-height: 1.5;color: #212529;text-align: center;text-decoration: none;vertical-align: middle;cursor: pointer;-webkit-user-select: none;-moz-user-select: none;user-select: none;background-color: #FFF;outline:1px solid #ced4da;border: none;padding: 0.375rem 0.75rem;font-size: 1rem;transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
+                .induxsoft-buttons:hover{ color: #212529;background-color: #F5F5F5; }
+                .button-icon{ display: flex; align-items: center; justify-content: center; }
+                .div-hidden{ border: none; outline: none; position: absolute; inset: 0; background-color: transparent; }
+            <style>
+        `;
+    }
+    _createFullElement(tagName = 'div', attributes = {}, html='') {
+        const elem = document.createElement(tagName);
+        const keys = Object.keys(attributes);
+        keys.forEach(key => elem.setAttribute(key, attributes[key]));
+        if (html) elem.innerHTML = html;
+        return elem;
+    }
+    _getURLParam(param)
+    {
+        let values = window.location.search;
+        const prms = new URLSearchParams(values);
+        return prms.get(param);
+    }
+    _submitFilter(ipt_search, ipt_hidden)
+    {
+        let idform = 'form';
+        if (this.hasAttribute('form') && this.getAttribute('form').trim() != "") idform = this.getAttribute('form');
+        const form = this.closest(idform);
+        if (!form)
+        {
+            alert('No se encontró el formulario con el selector especificado o dentro del documento');
+            return;
+        }
+        ipt_hidden.value = ipt_search.value;
+        form.submit();
+    }
+}
+
+class FilterDateRange extends HTMLElement
+{
+    attributes = null;
+    _container = null;
+    _field_va1 = null;
+    _field_va2 = null;
+    _field_mod = null;
+    _selection = null;
+
+    modes_panel = [
+        { mode: 'month', panel: 'FDR_pnl_monthly' },
+        { mode: 'lastdays', panel: '' },
+        { mode: 'range', panel: 'FDR_pnl_range' }
+    ]
+
+    constructor() {
+        super();
+        document.addEventListener('DOMContentLoaded', () => this.attributes = this.getAttributeNames());
+    }
+    static get observedAttributes() {
+        return attributes;
+    }
+    attributeChangeCallback(property, oldValue, newValue) {
+        if (newValue === oldValue) return;
+        this[property] = newValue;
+    }
+    connectedCallback()
+    {
+        document.addEventListener('DOMContentLoaded', () =>
+        {
+            const shadow = this.attachShadow({ mode: 'closed' });
+            this._writeStyles(shadow);
+
+            this._container = this._createFullElement('div', { id: 'FDR_container', class: 'border d-flex align-items-center gap-2' });
+            this._field_va1 = this._createFullElement('input', { type: 'hidden', id: 'FDR_ipt_v1' });
+            this._field_va2 = this._createFullElement('input', { type: 'hidden', id: 'FDR_ipt_v2' });
+            this._field_mod = this._createFullElement('input', { type: 'hidden', id: 'FDR_ipt_md', name: (this.getAttribute('mode-field') ?? '') });
+
+            const panel_mode = this._createFullElement('div', { id: 'FDR_pnl_mode' });
+            const panel_monthly = this._createFullElement('div', { id: 'FDR_pnl_monthly', class:'grow-1 panel' });
+            const panel_range = this._createFullElement('div', { id: 'FDR_pnl_range', class:'grow-1 panel d-none' });
+
+            const select_mode = this._createFullElement('select', { id: 'FDR_sel_mode', class: 'induxsoft-form-select no-border' });
+            panel_mode.appendChild(select_mode);
+
+            this._container.appendChild(panel_mode);
+            this._container.appendChild(panel_monthly);
+            this._container.appendChild(panel_range);
+
+            shadow.appendChild(this._container);
+            this.after(this._field_mod);
+            this.after(this._field_va1);
+            this.after(this._field_va2);
+
+            if ((this.getAttribute('selection')??'').trim() != '')
+            {
+                try { this._selection = JSON.parse((this.getAttribute('selection')??'{}')); }
+                catch { alert('El atributo selection tiene un formato JSON inválido'); }
+            }
+
+            this._fillSelectMode(select_mode);
+            this._printMonths(panel_monthly);
+            this._printRange(panel_range);
+        });
+    }
+
+    _createFullElement(tagName = 'div', attributes = {}, html = '') {
+        const elem = document.createElement(tagName);
+        const keys = Object.keys(attributes);
+        keys.forEach(key => elem.setAttribute(key, attributes[key]));
+        if (html) elem.innerHTML = html;
+        return elem;
+    }
+    _writeStyles(shadow) {
+        shadow.innerHTML = `
+            <style>
+                .text-secondary{ color: #888; }
+                .d-flex{ display: flex; }
+                .grow-1{ flex-grow: 1; }
+                .wrap{ flex-wrap: wrap; }
+                .gap-1{gap:4px;} .gap-2{gap:8px;}
+                .border{ border: 1px solid #ced4da; }
+                .no-border{ border: none !important; outline: none !important; }
+                .d-none{ display: none; }
+                .align-items-center{ align-items: center; }
+                .active-month { background-color: #005CC8 !important; color: #FFF !important; }
+                .input-date{ font-size: .9rem; }
+                .input-date:focus{ border-bottom: 1px solid #005CC8 !important; }
+                .fz-9{ font-size: .9rem; }
+                .induxsoft-form-control{ border: none; outline: 1px solid #ced4da; display: block; width: 100%; padding: 0.375rem 0.75rem !important; font-size: 1rem; font-weight: 400; line-height: 1.5; color: #212529; background-color: #fff; background-clip: padding-box; appearance: none; transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
+                .induxsoft-form-control:disabled, .induxsoft-form-control[readonly] { background-color: #e9ecef; opacity: 1; }
+                .induxsoft-buttons{ font-weight: 400;line-height: 1.5;color: #212529;text-align: center;text-decoration: none;vertical-align: middle;cursor: pointer;-webkit-user-select: none;-moz-user-select: none;user-select: none;background-color: #FFF;outline:1px solid #ced4da;border: none;padding: 0.375rem 0.75rem;font-size: 1rem;transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
+                .induxsoft-buttons:hover{ color: #212529;background-color: #F5F5F5; }
+                .induxsoft-form-select { display: block; width: 100%; padding: 0.375rem 2.25rem 0.375rem 0.75rem !important; -moz-padding-start: calc(0.75rem - 3px); font-size: 1rem; font-weight: 400; line-height: 1.5; color: #212529; background-color: #fff; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 16px 12px; border: none; outline: 1px solid #ced4da; -webkit-appearance: none; -moz-appearance: none; appearance: none; }
+            <style>
+        `;
+    }
+    _fillSelectMode(select)
+    {
+        let opt = this._createFullElement('option', { value: 'month' }, (this.getAttribute('label-months') ?? 'Ver por cada mes'));
+        select.appendChild(opt);
+
+        let lastDays = (this.getAttribute('lastdays-options') ?? '').split(',');
+        let lablDays = (this.getAttribute('label-days') ?? 'Últ. @lastdays días');
+        lastDays.forEach(day => {
+            let opt = this._createFullElement('option', { value: day }, lablDays.replace('@lastdays', day));
+            select.appendChild(opt);
+        });
+
+        if ((this.getAttribute('custom-range') ?? 'false') == 'true') {
+            let opt = this._createFullElement('option', { value: 'range' }, (this.getAttribute('label-custom') ?? 'Personalizado'));
+            select.appendChild(opt);
+        }
+
+        let range_field = (this.getAttribute('range-field') ?? 'range');
+
+        select.addEventListener('change', e => {
+            this._selectMode(select.value, lastDays);
+            if (this._field_mod.value == 'lastdays')
+            {
+                this._setFieldValues({ name: range_field, value: select.value }, null);
+                this._selection = {};
+                this._selection[this._field_mod.name] = 'lastdays';
+                this._selection[range_field] = select.value;
+                if (this._isAutoSubmit())
+                    this._submitFilter();
+            }
+        });
+
+        if (this._selection && this._selection[this._field_mod.name])
+        {
+            if (this._selection[this._field_mod.name] == 'lastdays')
+            {
+                select.value = (this._selection[range_field] ?? '');
+                this._setFieldValues({ name: range_field, value: select.value }, null);
+            }
+            else
+                select.value = this._selection[this._field_mod.name];
+        }
+        this._selectMode(select.value, lastDays);
+    }
+    _selectMode(mode, lastDays=null)
+    {
+        const panels = this._container.querySelectorAll('.panel');
+        panels.forEach(p => p.classList.add('d-none'));
+
+        let mp = this.modes_panel.find(m => (m.mode == mode || (lastDays && lastDays.includes(mode) && m.mode == 'lastdays')));
+        if (mp) this._field_mod.value = (mp.mode??'');
+        
+        if (mp && mp.panel != '') {
+            const panel = this._container.querySelector('#' + mp.panel);
+            if (panel) panel.classList.remove('d-none');
+            switch (mp.mode)
+            {
+                case 'month': this._printMonths(panel); break;
+                case 'lastdays': break;
+                case 'range': this._printRange(panel); break;
+            }
+        }
+    }
+    _printMonths(panel)
+    {
+        panel.innerHTML = '';
+
+        const container = this._createFullElement('div', { id: 'FDR_cont_montly', class: 'd-flex align-items-center' });
+        const div_years = this._createFullElement('div', { id: 'FDR_div_years', class: 'd-flex' });
+        const div_months = this._createFullElement('div', { id: 'FDR_div_months', class: 'd-flex grow-1 wrap' });
+
+        const yearfield = (this.getAttribute('year-field') ?? 'year');
+        const monthfield = (this.getAttribute('month-field') ?? 'month');
+
+        const select_year = this._createFullElement('select', { id: 'FDR_sel_year', class: 'induxsoft-form-select', name: yearfield });
+        div_years.appendChild(select_year);
+
+        let year_opts = (new Date().getFullYear().toString());
+        if ((this.getAttribute('years-options') ?? '').trim() != '') year_opts = this.getAttribute('years-options');
+        
+        year_opts.split(',').forEach(y => {
+            const opt = this._createFullElement('option', { value: y }, y);
+            select_year.appendChild(opt);
+        });
+
+        const input_mont = this._createFullElement('input', { type: 'hidden', name: monthfield });
+        container.appendChild(input_mont);
+
+        select_year.addEventListener('change', e => { 
+            this._setFieldValues(select_year, input_mont);
+            this._selection = {};
+            this._selection[this._field_mod.name] = 'month';
+            this._selection[yearfield] = select_year.value;
+            this._selection[monthfield] = input_mont.value;
+            if (this._isAutoSubmit())
+                this._submitFilter();
+        });
+
+        const active_month = (button) => {
+            div_months.querySelectorAll('.month-button').forEach(b => b.classList.remove('active-month'));
+            button.classList.add('active-month');
+        }
+        
+        if (this._selection && this._selection[this._field_mod.name] == 'month')
+        {
+            select_year.value = (this._selection[yearfield] ?? '');
+            input_mont.value = (this._selection[monthfield] ?? '');
+            this._setFieldValues(select_year, input_mont);
+        }
+
+        let names = (this.getAttribute('month-names') ?? 'Enero,Febrero,Marzo,Abril,Mayo,Junio,Julio,Agosto,Septiembre,Octubre,Noviembre,Diciembre').split(',');
+        for (let i = 1; i <= 12; i++) {
+            let oc = ((Number((input_mont.value ?? '-1')) != i) ? '' : 'active-month');
+            const month = this._createFullElement('button', { type: 'button', class: 'induxsoft-buttons month-button ' + oc, value: i }, `<small>${(names[i-1] ?? '')}</small>`);
+            div_months.appendChild(month);
+            month.onclick = e => {
+                active_month(month);
+                input_mont.value = month.getAttribute('value');
+                this._setFieldValues(select_year, input_mont);
+                this._selection = {};
+                this._selection[this._field_mod.name] = 'month';
+                this._selection[yearfield] = select_year.value;
+                this._selection[monthfield] = input_mont.value;
+                if (this._isAutoSubmit())
+                    this._submitFilter();
+            }
+        }
+
+        container.appendChild(div_years);
+        container.appendChild(div_months);
+        panel.appendChild(container);
+    }
+    _printRange(panel)
+    {
+        panel.innerHTML = '';
+
+        const container = this._createFullElement('div', { id: 'FDR_cont_range', class: 'd-flex gap-2 align-items-center' });
+
+        const div_datef = this._createFullElement('div', { id: 'FDR_div_datef', class: 'd-flex align-items-center gap-2' }, `<small class="text-secondary">${ (this.getAttribute('label-from') ?? 'Desde:') }</small>`);
+        const div_datet = this._createFullElement('div', { id: 'FDR_div_datet', class: 'd-flex align-items-center gap-2' }, `<small class="text-secondary">${ (this.getAttribute('label-to') ?? 'Hasta:') }</small>`);
+        
+        let name_datef = (this.getAttribute('from-field') ?? 'fromdate');
+        let name_datet = (this.getAttribute('to-field') ?? 'todate');
+
+        const input_datef = this._createFullElement('input', { type: 'date', id: 'FDR_ipt_datef', class: 'induxsoft-form-control no-border input-date', disabled: '', name: name_datef });
+        const input_datet = this._createFullElement('input', { type: 'date', id: 'FDR_ipt_datet', class: 'induxsoft-form-control no-border input-date', disabled: '', name: name_datet });
+
+        if (this._selection && this._selection[this._field_mod.name] == 'range')
+        {
+            input_datef.value = (this._selection[name_datef] ?? '');
+            input_datet.value = (this._selection[name_datet] ?? '');
+            this._setFieldValues(input_datef, input_datet);
+        }
+
+        const div_cntrls = this._createFullElement('div', { id:'FDR_div_cntrls', class:'d-flex align-items-center' });
+        const btn_accept = this._createFullElement('button', { id: 'FDR_btn_accept', type: 'button', class: 'induxsoft-buttons no-border d-none' }, '<small>Aplicar</small>');
+        const btn_cancel = this._createFullElement('button', { id: 'FDR_btn_cancel', type: 'button', class: 'induxsoft-buttons no-border d-none' }, '<small>Cancelar</small>');
+        const btn_modify = this._createFullElement('button', { id: 'FDR_btn_modify', type: 'button', class: 'induxsoft-buttons no-border' }, '<small>Modificar</small>');
+
+        div_datef.appendChild(input_datef);
+        div_datet.appendChild(input_datet);
+
+        container.appendChild(div_datef);
+        container.appendChild(div_datet);
+
+        div_cntrls.appendChild(btn_accept);
+        div_cntrls.appendChild(btn_cancel);
+        div_cntrls.appendChild(btn_modify);
+        container.appendChild(div_cntrls);
+
+        panel.appendChild(container);
+
+        const edit_dates = (edit = true) =>
+        {
+            btn_accept.classList.toggle('d-none', !edit);
+            btn_cancel.classList.toggle('d-none', !edit);
+            btn_modify.classList.toggle('d-none', edit);
+
+            input_datef.toggleAttribute('disabled', !edit);
+            input_datet.toggleAttribute('disabled', !edit);
+        }
+
+        let tempf = '';
+        let tempt = '';
+
+        btn_cancel.onclick = () => {
+            input_datef.value = tempf;
+            input_datet.value = tempt;
+            edit_dates(false); 
+        }
+        btn_modify.onclick = () => {
+            edit_dates(true); 
+            input_datef.focus();
+            tempf = input_datef.value;
+            tempt = input_datet.value;
+        }
+        btn_accept.onclick = () => {
+            edit_dates(false);
+            this._setFieldValues(input_datef, input_datet);
+            this._selection = {};
+            this._selection[this._field_mod.name] = 'range';
+            this._selection[name_datef] = input_datef.value;
+            this._selection[name_datet] = input_datet.value;
+            if (this._isAutoSubmit())
+                this._submitFilter();
+        }
+        input_datef.addEventListener('keyup', e => {
+            if (e.key == 'Enter') input_datet.focus();
+        });
+        input_datet.addEventListener('keyup', e => {
+            if (e.key == 'Enter') btn_accept.focus();
+        });
+    }
+    _setFieldValues(field1, field2)
+    {
+        this._field_va1.removeAttribute('name');
+        this._field_va2.removeAttribute('name');
+        if (field1?.name ?? null) this._field_va1.setAttribute('name', field1.name);
+        if (field2?.name ?? null) this._field_va2.setAttribute('name', field2.name);
+        this._field_va1.value = (field1?.value ?? '');
+        this._field_va2.value = (field2?.value ?? '');
+    }
+    _submitFilter()
+    {
+        let idform = 'form';
+        if (this.hasAttribute('form') && this.getAttribute('form').trim() != "") idform = this.getAttribute('form');
+        const form = this.closest(idform);
+        
+        if (!form)
+        {
+            alert('No se encontró el formulario con el selector especificado o dentro del documento');
+            return;
+        }
+
+        form.submit();
+    }
+    _isAutoSubmit()
+    {
+        return ((this.getAttribute('auto-submit') ?? 'false') == 'true');
+    }
+}
+
 customElements.define('edit-select', EditSelect);
 customElements.define('input-key', InputKey);
 customElements.define('check-list', CheckList);
@@ -2636,3 +3265,5 @@ customElements.define('stack-edit', StackEdit);
 customElements.define('date-range', DateRange);
 customElements.define('safe-input', SafeInput);
 customElements.define('media-list', MediaList);
+customElements.define('filter-text', FilterText);
+customElements.define('filter-date-range', FilterDateRange);

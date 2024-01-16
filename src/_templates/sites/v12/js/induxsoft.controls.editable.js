@@ -34,13 +34,13 @@ class EditTable extends HTMLElement
                     .EdiTable-Selector{
                         width: 100%;
                         height: 100%;
-                        text-align: left;
+                        text-align: inherit;
                         background-color: rgba(255,255,255,.7);
                         cursor: text;
                         border: 1px solid #FFF;
                         border-radius: 3px;
                         outline: none;
-                        padding: 3px;
+                        color: #000;
                     }
                     .EdiTable-Input-Check{
                         height: 100%;
@@ -48,9 +48,9 @@ class EditTable extends HTMLElement
                     .EdiTable-Cell
                     {
                         height: 1.4rem;
-                        padding: 4px;
                         outline: 1px solid #EDEDED;
                         position: relative;
+                        padding: 4px;
                     }
                     .EdiTable-Row-Selected
                     {
@@ -169,7 +169,13 @@ class EditTable extends HTMLElement
                     .induxsoft-form-select {display: block;width: 100%;padding: 0.375rem 2.25rem 0.375rem 0.75rem !important;-moz-padding-start: calc(0.75rem - 3px);font-size: 1rem;font-weight: 400;line-height: 1.5;color: #212529;background-color: #fff;background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");background-repeat: no-repeat;background-position: right 0.75rem center;background-size: 16px 12px;border: none;outline:1px solid #ced4da;-webkit-appearance: none;-moz-appearance: none;appearance: none;
                     }
 
+                    .transparent{ background-color: transparent !important; border: none !important; outline: none !important; color: inherit !important; }
+                    a{ color: inherit; }
                     ` + (this.getAttribute('control-styles') ?? '') + `
+                    @media print
+                    {
+                        .no-print{ display: none !important; }
+                    }
                 </style>
             `;
 
@@ -178,7 +184,7 @@ class EditTable extends HTMLElement
                 try{ this.DataArray = JSON.parse(this.getAttribute('data')); }
                 catch{ alert('El valor del atributo "data" tiene un formato JSON inválido'); this.DataArray = []; }
             }
-
+            if (this.hasAttribute('html-encode')) this.htmlEncode = (this.getAttribute('html-encode')=='true');
             const container1 = this._createFullElement('div', { style:'min-height: 2rem; max-height: 100%; overflow: auto; padding-bottom: 5px' });
             this._table = this._getFullTable();
             container1.appendChild(this._table);
@@ -194,6 +200,11 @@ class EditTable extends HTMLElement
             this._processAtributesColumn();
             this._resizableGrid(this._table);
             this._setSortEvent();
+            this._setMoveEvent();
+            this._initOtherValues();
+
+            // Si no se ha proporcionado el atributo data para el dataArray se genera a partir del contenido de la tabla
+            if (this.DataArray.length < 1) this.UpdateData();
         });
     }
 
@@ -221,7 +232,7 @@ class EditTable extends HTMLElement
             tbody.querySelectorAll('tr').forEach(tr => {
                 tr.querySelectorAll('edit-td').forEach(editTd => {
                     editTd.classList.add('EdiTable-Cell');
-                    editTd.replaceWith(this._replaceTagNameElement(editTd, 'td'))
+                    editTd.replaceWith(this._replaceTagNameElement(editTd, 'td'));
                 });
             });
         }
@@ -234,11 +245,8 @@ class EditTable extends HTMLElement
                     let coldef = this._getColdefByTh(th);
                     const td = this._createFullElement('td', { class:'EdiTable-Cell' });
                     Object.keys(data).forEach(key => {
-                        if (td.textContent == '' && (th.getAttribute('field') == key || th.getAttribute('keyfield') == key)){
-                            let value = data[key];
-                            if (this._withFormat(coldef, value))
-                                value = this._aplyFormat(coldef, value);
-                            td.textContent = value;
+                        if (td.textContent == '' && (th.getAttribute('field') == key)){
+                            this.SetTdValue(td, data[key], true);
                         }
                     });
                     tr.appendChild(td);
@@ -498,6 +506,8 @@ class EditTable extends HTMLElement
     }
     _setMoveEvent=()=>
     {
+        if (!this.CanMoveRow) return;
+
         let asChild = false;
 
         const getTr = (e) =>
@@ -632,13 +642,18 @@ class EditTable extends HTMLElement
 
         return `${integerPart}${this.NumFormat.decimals}${fractionalPart}`;
     }
+    _initOtherValues()
+    {
+        if (this.hasAttribute('hidde-selector')) this.hiddeSelector = (this.getAttribute('hidde-selector')=='true');
+        if (this.hasAttribute('hide-row-selector')) this.hiddeRowSelector = (this.getAttribute('hide-row-selector')=='true');
+    }
 
     // ========================= EDITABLE FUNCTIONS
     
     _EdiTable = () => { return {
         Const : {
             HTML:{
-                Selector:'<button id="__table_selector" class="EdiTable-Selector"></button>',
+                Selector:'<div id="__table_selector" class="EdiTable-Selector" tabindex="0"></div>',
                 Button:'<button id="__table_button" class="EdiTable-Button"></button>',
                 Inputs:{
                     "Text":'<input type="text" id="__table_input" class="Editable-Input-Text"/>',
@@ -998,6 +1013,7 @@ class EditTable extends HTMLElement
     ColumnsDefaultType = this.EdiTable.Const.Columns.Types.Text;
     
     ShowAsTree = true;
+    CanMoveRow = false;
     TreeOptions = {};
     Key = "id";
     ParentKey = "idp";
@@ -1008,6 +1024,9 @@ class EditTable extends HTMLElement
         thousands:",",
         decimals:"."
     }
+    hiddeSelector = false;
+    hiddeRowSelector = false;
+    htmlEncode = false;
     
     CSS = {
         Cell:"EdiTable-Cell",
@@ -1179,7 +1198,7 @@ class EditTable extends HTMLElement
             if (this.Columns[i]!=undefined)
             {
                 if (this.Columns[i].field!=undefined)
-                    this.SetTdValue(tds[i], (this.DataArray[row][this.Columns[i].field] ?? ''));
+                    this.SetTdValue(tds[i], (this.DataArray[row][this.Columns[i].field] ?? ''), true);
                     //tds[i].innerHTML = (this.DataArray[row][this.Columns[i].field] ?? '');
             }
         }
@@ -1214,7 +1233,7 @@ class EditTable extends HTMLElement
             {
                 if (this.Columns[i].field!=undefined)
                 {
-                    if (tds[i]==this.CurrentTd()[0])
+                    if (tds[i]==this.CurrentTd())
                     {
                         if (!this.Editing)
                         {
@@ -1224,7 +1243,7 @@ class EditTable extends HTMLElement
                     else
                     {
                         //this.UpdateDataMember(row,this.Columns[i].field,tds[i].innerHTML);
-                        this.UpdateDataMember(row,this.Columns[i].field,this.GetTdValue(tds[i]));
+                        this.UpdateDataMember(row,this.Columns[i].field,this.GetTdValue(tds[i], true));
                     }
                 }
             }
@@ -1593,31 +1612,31 @@ class EditTable extends HTMLElement
         {
             case this.EdiTable.Const.Columns.Types.Memo:
                 //td.innerHTML = this.EdiTable.Const.HTML.Inputs.Memo;
-                this.SetTdValue(td, this.EdiTable.Const.HTML.Inputs.Memo);
+                this.SetTdValue(td, this.EdiTable.Const.HTML.Inputs.Memo, false);
                 break;
             case this.EdiTable.Const.Columns.Types.Date:
                 //td.innerHTML = this.EdiTable.Const.HTML.Inputs.Date;
-                this.SetTdValue(td, this.EdiTable.Const.HTML.Inputs.Date);
+                this.SetTdValue(td, this.EdiTable.Const.HTML.Inputs.Date, false);
                 break;
             case this.EdiTable.Const.Columns.Types.DateTime:
                 //td.innerHTML = this.EdiTable.Const.HTML.Inputs.DateTime;
-                this.SetTdValue(td, this.EdiTable.Const.HTML.Inputs.DateTime);
+                this.SetTdValue(td, this.EdiTable.Const.HTML.Inputs.DateTime, false);
                 break;
             case this.EdiTable.Const.Columns.Types.Select:
                 //td.innerHTML = this.EdiTable.Const.HTML.Inputs.Select;
-                this.SetTdValue(td, this.EdiTable.Const.HTML.Inputs.Select);
+                this.SetTdValue(td, this.EdiTable.Const.HTML.Inputs.Select, false);
                 break;
             case this.EdiTable.Const.Columns.Types.Check:
                 //td.innerHTML = this.EdiTable.Const.HTML.Inputs.Check;
-                this.SetTdValue(td, this.EdiTable.Const.HTML.Inputs.Check);
+                this.SetTdValue(td, this.EdiTable.Const.HTML.Inputs.Check, false);
                 break;
             case this.EdiTable.Const.Columns.Types.Number:
                 //td.innerHTML = this.EdiTable.Const.HTML.Inputs.Number;
-                this.SetTdValue(td, this.EdiTable.Const.HTML.Inputs.Number);
+                this.SetTdValue(td, this.EdiTable.Const.HTML.Inputs.Number, false);
                 break;
             case this.EdiTable.Const.Columns.Types.Text:
                 //td.innerHTML = this.EdiTable.Const.HTML.Inputs.Text;
-                this.SetTdValue(td, this.EdiTable.Const.HTML.Inputs.Text);
+                this.SetTdValue(td, this.EdiTable.Const.HTML.Inputs.Text, false);
                 break;
         }
         let input=this.EdiTable.GetInput();
@@ -1726,7 +1745,7 @@ class EditTable extends HTMLElement
         }
         
         //td.innerHTML = eventArgs.text;
-        this.SetTdValue(td, eventArgs.text);
+        this.SetTdValue(td, eventArgs.text, true);
         this.UpdateDataMember(this.RowIndexOfTd(td),columnDef.field,eventArgs.text);
 
         return true;
@@ -1751,7 +1770,7 @@ class EditTable extends HTMLElement
             if (this["temp_html"]!=undefined && this.EdiTable.focusedTable==this._getCurren())
             {
                 //td.innerHTML = this["temp_html"];
-                this.SetTdValue(td, this["temp_html"]);
+                this.SetTdValue(td, this["temp_html"], true);
             }
 
             this.CellFocus(td);
@@ -1799,8 +1818,7 @@ class EditTable extends HTMLElement
 
         if (selector!=undefined)
         {
-            //selector.closest('td').innerHTML = selector.innerHTML;
-            this.SetTdValue(selector.closest('td'), selector.innerHTML);
+            this.SetTdValue(selector.closest('td'), selector.innerHTML, true);
             if (this.EdiTable.focusedTable!=null)
             {
                 this.LeaveCell(selector.closest('td'));
@@ -1809,14 +1827,14 @@ class EditTable extends HTMLElement
             selector.remove();
         }
 
-        let txt=this.GetTdValue(td);
+        let txt=this.GetTdValue(td, false);
         //let txt=td.innerHTML;
 
         let button = '';
         let coldef = this.GetColumnDefOfTd(td);
 
         if (coldef && (coldef['button'] ?? '') == 'true') button = this.EdiTable.Const.HTML.Button;
-        this.SetTdValue(td,this.EdiTable.Const.HTML.Selector+button);
+        this.SetTdValue(td,this.EdiTable.Const.HTML.Selector+button, false);
         //td.innerHTML = this.EdiTable.Const.HTML.Selector;
         
         let btn = this.EdiTable.GetButtonOption();
@@ -1843,6 +1861,7 @@ class EditTable extends HTMLElement
         }
 
         selector=this.EdiTable.GetSelector();
+        selector.classList.toggle('transparent', this.hiddeSelector);
         selector.innerHTML = txt;
         this.EdiTable.focusedTable=this._getCurren(true);
 
@@ -1861,7 +1880,7 @@ class EditTable extends HTMLElement
         {
             let trs = td.closest('tr').parentElement.querySelectorAll('tr');
             if (trs && trs.length > 0) trs.forEach(tr => tr.classList.remove(this.CSS.RowSelected));
-            td.closest('tr').classList.add(this.CSS.RowSelected);
+            if(!this.hiddeRowSelector) td.closest('tr').classList.add(this.CSS.RowSelected);
         }
     }
     /**
@@ -1955,7 +1974,7 @@ class EditTable extends HTMLElement
         //     td.innerHTML = '@value';
         return td.innerHTML;
     }
-    GetTdValue=(td)=>
+    GetTdValue=(td, valideEncode=false)=>
     {
         let value = td.innerHTML;
         const cellContent = td.querySelector('div[iscellcontent=true]');
@@ -1966,14 +1985,18 @@ class EditTable extends HTMLElement
         let coldef = this.GetColumnDefOfTd(td);
         if (this._withFormat(coldef, value))
             value = value.replace(/[^0-9.]+/g, "");
+
+        if (valideEncode && this.htmlEncode) value = this.getHtmlDecode(value);
         
         return value;
     }
-    SetTdValue=(td, value)=>
+    SetTdValue=(td, value, valideEncode=false)=>
     {
         let coldef = this.GetColumnDefOfTd(td);
         if (this._withFormat(coldef, value))
             value = this._aplyFormat(coldef, value);
+
+        if (valideEncode && this.htmlEncode) value = this.setHtmlEncode(value);
 
         const cellContent = td.querySelector('div[iscellcontent=true]');
         if (cellContent)
@@ -1981,7 +2004,6 @@ class EditTable extends HTMLElement
             cellContent.innerHTML = value;
             return;
         }
-
         td.innerHTML = value;
     }
     _withFormat(coldef, value)
@@ -1991,7 +2013,7 @@ class EditTable extends HTMLElement
             && !value.includes('__table_selector') 
             && !value.includes('__table_input') 
             && coldef 
-            && coldef.type.toLowerCase() == 'number' 
+            && (coldef.type.toLowerCase() == 'number' || coldef.type.toLowerCase() == 'noeditable')
             && (coldef.format??'') == 'true');
     }
     _aplyFormat(coldef, value)
@@ -2019,6 +2041,9 @@ class EditTable extends HTMLElement
     {
         let v = (this.getAttribute('show-tree') ?? '').trim();
         this.ShowAsTree = (v == 'true');
+
+        v = (this.getAttribute('can-move-row') ?? (this.ShowAsTree ? 'true' : 'false')).trim();
+        this.CanMoveRow = (v == 'true');
 
         v = (this.getAttribute('key') ?? '').trim();
         this.Key = (v != '' ? v : this.Key);
@@ -2089,10 +2114,11 @@ class EditTable extends HTMLElement
                         const content = this._createFullElement('div', { iscellcontent:'true', class:'cell-content' });
                         container.appendChild(content);
                         Object.keys(data).forEach(key => {
-                            if (td.textContent == '' && (th.getAttribute('field') == key || th.getAttribute('keyfield') == key)){
+                            if (td.textContent == '' && th.getAttribute('field') == key){
                                 let value = data[key];
                                 if (this._withFormat(coldef, value))
                                     value = this._aplyFormat(coldef, value);
+                                    if (this.htmlEncode) value = this.setHtmlEncode(value);
                                     content.innerHTML = value;
                             }
                         });
@@ -2102,11 +2128,8 @@ class EditTable extends HTMLElement
                     else
                     {
                         Object.keys(data).forEach(key => {
-                            if (td.textContent == '' && (th.getAttribute('field') == key || th.getAttribute('keyfield') == key)) {
-                                let value = data[key];
-                                if (this._withFormat(coldef, value))
-                                    value = this._aplyFormat(coldef, value);
-                                td.innerHTML = value;
+                            if (td.textContent == '' && th.getAttribute('field') == key) {
+                                this.SetTdValue(td, data[key], true);
                             }
                         });
                     }
@@ -2152,7 +2175,7 @@ class EditTable extends HTMLElement
             if (tr) this.ExpandRow(tr);
         });
         this.Initialize(this._table.getAttribute('id'));
-        if (this.ShowAsTree) this._setMoveEvent();
+        this._setMoveEvent();
     }
 
     _setIndent=(td, indent=0)=>
@@ -2417,6 +2440,26 @@ class EditTable extends HTMLElement
     {
         let coldef = this.GetColumnDefOfTd(td);
         if (coldef && coldef.inputkey) coldef.inputkey.searchText(searchText, autoselect);
+    }
+    replaceSymbols={
+        "'":"&apos;",
+        '"':"&quot;",
+        ">":"&gt;",
+        "<":"&lt;",
+    };
+    setHtmlEncode(value)
+    {
+        if (typeof value !== 'string') return value;
+        for(const r in this.replaceSymbols)
+            value = value.replaceAll(r, this.replaceSymbols[r]);
+        return value;
+    }
+    getHtmlDecode(value)
+    {
+        if (typeof value !== 'string') return value;
+        for(const r in this.replaceSymbols)
+            value = value.replaceAll(this.replaceSymbols[r], r);
+        return value;
     }
 }
 

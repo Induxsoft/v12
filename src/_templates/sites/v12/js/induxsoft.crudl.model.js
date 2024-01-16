@@ -1,6 +1,6 @@
 var InduxsoftCrudlModel =
 {
-	async InvokeService(url, data, success, fail, method = 'GET', reload = true, async = true, autorizations = '', formdata = false) 
+	async InvokeService(url, data, success, fail, method='GET', reload=true, async=true, autorizations='', formdata=false, beforeFetch=null) 
 	{
 		let fetchData = {
 			method: method,
@@ -32,7 +32,7 @@ var InduxsoftCrudlModel =
 						if (json.success && success) {
 							success(json.data ?? json);
 						}
-						else if (!json.success && json.success != null && res.success != undefined && fail) {
+						else if (!json.success && json.success != null && json.success != undefined && fail) {
 							fail(json);
 						}
 						else {
@@ -53,6 +53,8 @@ var InduxsoftCrudlModel =
 			if (reload)
 				window.location.reload();
 		}
+
+		if (beforeFetch) beforeFetch(fetchData);
 
 		if (async) {
 			await fetch(url, fetchData).then(resHandler).catch(error => {
