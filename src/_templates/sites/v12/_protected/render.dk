@@ -11,7 +11,7 @@ module ""
 		program=@@(@http_context,"$request/get/_program")
 		view=@@(@http_context,"$request/get/_view")
 		
-		if view==""
+		if view=="" && pack!="" && program !=""
 		{
 			if @@(@http_context,"$request/get/_entity_id")=="" { view="list" }
 			else if @@(@http_context,"$request/get/_entity_id")=="_new" { view="form new" }
