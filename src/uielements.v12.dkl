@@ -52,11 +52,15 @@ module
         }
     }
 
-    #! function uie.printMainBar(&buttons, title, printer)
+    #!
+    function uie.printMainBar(&buttons, title, printer, url_back)
     {
         // buttons: Referencia a una función que imprime otros botones en el encabezado
         // title: Texto del encabezado
         // printer: (true/false) Pinta el botón de impresión en el encabezado
+        // url_back: url del botón de salir, si es vacío se redirigirá hacia la raíz
+
+        ub = ifstr(trim(url_back)=="", "/", url_back)
 
         #$ div(id="main_bar" class="row container-section my-2 px-0 py-2 border-bottom")
         {
@@ -74,7 +78,7 @@ module
                 {
                     #$ button(class="btn btn-sm border-secondary induxsoft-corners btn-main-action no-print" title="Imprimir" onclick="window.print()"){$"#<@ICON_PRINTER>"}
                 }
-                a(href="/" target="_top" class="btn btn-sm border-secondary induxsoft-corners btn-main-action no-print" title="Salir" id="btn_go_back"){$"#<@ICON_X_LG>"}
+                a(href="#<ub>" target="_top" class="btn btn-sm border-secondary induxsoft-corners btn-main-action no-print" title="Salir" id="btn_go_back"){$"#<@ICON_X_LG>"}
             }
         }
     }
