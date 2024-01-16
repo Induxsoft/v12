@@ -1,4 +1,4 @@
-copywebcomponents.bat
+
 @echo EMPAQUETAR  
 IF "%~1"=="" GOTO ERROR1
 
