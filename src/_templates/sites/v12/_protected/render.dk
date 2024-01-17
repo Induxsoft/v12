@@ -4,7 +4,7 @@ module ""
 {
     #include "functions.dkh"
 
-    factoryseal::
+    v12_view_info::
 	{
 		//Inserta información de la vista al pie
 		pack=@@(@http_context,"$request/get/_pack")
@@ -23,7 +23,22 @@ module ""
 		
 		if strseal!=""
 		{
-			strseal='<div class="container-fluid text-center"><small class="text-secondary">'+strseal+'</small></div>'
+            strseal='
+                <script>
+                    var view_info_span=window.top.document.getElementById("c_view_info");
+                    if (view_info_span)
+                    {
+                        view_info_span.textContent = "'+ strseal +'"; 
+                    }
+                    else
+                    {
+                        const div = document.createElement("div");
+                        div.innerHTML = `<div class="container-fluid text-center"><small class="text-secondary">'+strseal+'</small></div>`;
+                        document.body.appendChild(div);
+                    }
+                </script>
+            '
+			//strseal='<div class="container-fluid text-center"><small class="text-secondary">'+strseal+'</small></div>'
 		}
 		
 		return strseal
@@ -95,7 +110,7 @@ module ""
             #<@@(@http_context,"$session/resource/properties/web_page/start_body")>
             #<@content>
             #<@@(@http_context,"$session/resource/properties/web_page/end_body")>
-            #<factoryseal()>
+            #<v12_view_info()>
         </body>
     </html>'
 
