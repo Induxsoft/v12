@@ -62,7 +62,7 @@ module
 
         ub = ifstr(trim(url_back)=="", "/", url_back)
 
-        #$ div(id="main_bar" class="row container-section my-2 px-0 py-2 border-bottom")
+        #$ div(id="main_bar" class="row container-section m-0 my-2 p-2 border-bottom")
         {
             div(class="col-4 d-flex align-items-center p-0")
             {
