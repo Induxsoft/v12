@@ -14,8 +14,6 @@
     transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 }
 
-.induxsoft-form-select:disabled,
-.induxsoft-form-select[readonly],
 .induxsoft-form-control:disabled,
 .induxsoft-form-control[readonly] {
     background-color: #e9ecef;
