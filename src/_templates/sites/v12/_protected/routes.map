@@ -1,8 +1,7 @@
 # $ = Recursos estáticos
 # ! = Paquetes
 
-*: /{_pack}/_services/{_level1}/{_level2}/{_svc?} > ${_pack}/_services/{_level1}/{_level2}/{_svc}
-*: /{_pack}/_services/{_level1}/{_svc?} > ${_pack}/_services/{_level1}/{_svc}
+*: /{_pack}/_services/{_program}/{_svc?} > ${_pack}/_services/{_program}/{_svc}
 *: /{_pack}/_services/{_svc?} > ${_pack}/_services/{_svc}
 
 *: /!/{_pack}/{_program}/{_entity_id}/{_view?}/ > ${_pack}/entry-point.dkl
