@@ -57,7 +57,7 @@ module "Proveedor de Identidades [Id Provider] desde base de datos"
 
         new idp
         {
-            @"name":"db_idp"
+            @"name":"db_idp_v12"
             @"qname":dbqname
             @"database*":db
         }
