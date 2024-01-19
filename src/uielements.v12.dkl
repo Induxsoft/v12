@@ -61,6 +61,7 @@ module
         // url_back: url del botón de salir, si es vacío se redirigirá hacia la raíz
 
         ub = ifstr(trim(url_back)=="", "/", url_back)
+        target = ifstr(ub=="/", "_top", "_self")
 
         #$ div(id="main_bar" class="row container-section m-0 my-2 p-2 border-bottom")
         {
@@ -78,7 +79,7 @@ module
                 {
                     #$ button(class="btn btn-sm border-secondary induxsoft-corners btn-main-action no-print" title="Imprimir" onclick="window.print()"){$"#<@ICON_PRINTER>"}
                 }
-                a(href="#<ub>" target="_top" class="btn btn-sm border-secondary induxsoft-corners btn-main-action no-print" title="Salir" id="btn_go_back"){$"#<@ICON_X_LG>"}
+                a(href="#<ub>" target="#<target>" class="btn btn-sm border-secondary induxsoft-corners btn-main-action no-print" title="Salir" id="btn_go_back"){$"#<@ICON_X_LG>"}
             }
         }
     }
