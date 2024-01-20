@@ -12,7 +12,13 @@ module
         ref datatable = @@(table_definition, "&datatable")
         ref columns = @@(table_definition, "&columns")
         tableHeight = field.dstr(table_definition, "tableheight", "75vh")
-        tableLeyend = field.dstr(table_definition, "leyend", "Mostrando los primeros # registros ordenados por código")
+        
+        //
+        // Previsión de error ortográfico leyed por legend
+        if not(field.exist(table_definition,"table_footer")) { table_definition<"table_footer">:field.dstr(table_definition, "leyend", "Mostrando los primeros # registros ordenados por código")}
+        //
+
+        tableLeyend = @@(table_definition, "$table_footer")
 
         #$ div
         {
@@ -84,6 +90,210 @@ module
         }
     }
 
+    #! function uie.printV12FormBar(&config)
+    {
+        // config
+        // {
+        //      title: "Mi título",     -> título de la vista
+        //      hidden: { print:true }, -> ocultar botón[print, refresh, exit, report, actions] (def: false)
+        //      buttons: point_func,    -> puntero a una función que pinta botones (acciones principales)
+        //      urlexit: "../",         -> url del botón salir (def: "/")
+        //      actions: [{}, ...],     -> lista de objetos 'acciones'
+        //      reports: [{}, ...],     -> lista de objetos 'reportes'
+        //      main: ["act1", ....],   -> lista de IDs de acciones y reportes que se listarán
+        //      jscurrentcontext: "fn", -> nombre de la función JS que retorna un objeto: { item_id:1, context:{} }
+        // }
+        
+        ref hidden = ifnull(@@(config, "&hidden"), record.create())
+        ref actlst = ifnull(@@(config, "&actions"), list.create())
+        ref replst = ifnull(@@(config, "&reports"), list.create())
+        ref m_acts = @@(config, "&buttons")
+        title_view = field.dstr(config, "title", "")
+        urlexitbtn = field.dstr(config, "urlexit", "/")
+        main_list = field.dstr(config, "main", "")
+        js_fncname = field.dstr(config, "jscurrentcontext", "")
+
+        btn_cls = "btn btn-sm border-secondary induxsoft-corners btn-main-action no-print"
+        url_trg = ifstr(urlexitbtn=="/", "_top", "_self")
+
+        ref main_buttons = uie.getMainButtons(actlst, replst, main_list)
+
+        if isnull(m_acts) && trim(main_list) == ""
+        {
+            ref list = list.create()
+            ref mains = list.create()
+            for i = 0; i < list.count(actlst)
+            {
+                if i<3 { 
+                    ref obj = list.obj(actlst, i)
+                    do list.add(mains, @@(obj,"$id"))
+                    do list.add(list, obj) 
+                }
+            }
+            main_list = replace(ranychars(to.json(mains),'[]{}"', " ")," ","")
+            ref main_buttons = uie.getMainButtons(list, list.create(), main_list)
+        }
+
+        ref actlst = uie.deleteItems(actlst, main_list)
+        ref replst = uie.deleteItems(replst, main_list)
+
+        #$ div(id="main_bar" class="row container-section m-0 my-2 p-2 border-bottom")
+        {
+            div(class="col-4 d-flex align-items-center p-0")
+            {
+                // Title
+                h5(class="tex-no-break m-0"){$"#<title_view>"}
+            }
+            div(class="col-8 d-flex align-items-center justify-content-end p-0 gap-2")
+            {
+                // Buttons
+                #! if not(isnull(m_acts)) { that m_acts }
+
+                for i = 0; i < list.count(main_buttons)
+                {
+                    ref btn = list.obj(main_buttons, i)
+                    #$ a(class="#<btn_cls> list-action" title="#<@@(btn,'$title')>" href="#<@@(btn,'$href')>"){$"#<@@(btn,'$title')>"}
+                }
+                
+                #! if not(parse.bool(field.dnum(hidden,"actions",0))) && list.count(actlst) > 0 {
+                    #$ button(class="#<btn_cls> list-action" title="Acciones" list="ik_list_actions"){$"#<@ICON_ACTIONS>"}
+                }
+                #! if not(parse.bool(field.dnum(hidden,"report",0))) && list.count(replst) > 0 {
+                    #$ button(class="#<btn_cls> list-action" title="Reporte" list="ik_list_reports"){$"#<@ICON_REPORT>"}
+                }
+                #! if not(parse.bool(field.dnum(hidden,"print",0))) {
+                    #$ button(class="#<btn_cls>" title="Imprimir" onclick="window.print()"){$"#<@ICON_PRINTER>"}
+                }
+                #! if not(parse.bool(field.dnum(hidden,"refresh",0))) {
+                    #$ button(class="#<btn_cls>" title="Refrescar" onclick="window.location.reload();"){$"#<@ICON_ARROW_CLOCKWISE>"}
+                }
+                #! if not(parse.bool(field.dnum(hidden,"exit",0))) {
+                    #$ a(class="#<btn_cls>" title="Salir" href="#<urlexitbtn>" target="#<url_trg>" id="btn_go_back"){$"#<@ICON_X_LG>"}
+                }
+            }
+
+            #!
+            do uie.printItemActions(actlst, "ik_list_actions", "Acción")
+            do uie.printItemActions(replst, "ik_list_reports", "Reporte")
+
+            #$
+            script{$'
+                var v12navbar =
+                {
+                    init()
+                    {
+                        const btn_actions = document.querySelectorAll(".list-action");
+                        if (btn_actions) btn_actions.forEach(btn => {
+                            const list = document.querySelector("#"+btn.getAttribute("list"));
+                            btn.addEventListener("click", e => {
+                                if (list) list.searchText("%");
+                            });
+                            if (list) list.change_event = (data) => { v12navbar.selectAction(data); }
+                        });
+                    },
+                    selectAction(data)
+                    {
+                        if (data)
+                        {
+                            let url = data.href;
+                            let obj = v12navbar.getContext("#<js_fncname>");
+                            
+                            let item_id = (obj.item_id ?? "");
+                            let context = (!obj.context ? "" : encodeURIComponent(JSON.stringify(obj.context)));
+
+                            if ((data.req_context_item_id ?? false) && item_id==""){
+                                alert("Se requiere seleccionar un elemento de tipo " + data.itemtype);
+                                return;
+                            }
+
+                            url = url.replace("@_src_context_item_id", item_id);
+                            url = url.replace("@_src_context_encode", context);
+
+                            window.location.href = url;
+                        }
+                    },
+                    getContext(fname)
+                    {
+                        let context = {};
+                        try{
+                            context = eval(fname+"()");
+                        } catch(error){ }
+                        return context;
+                    }
+                }
+                document.addEventListener("DOMContentLoaded", () => {
+                    v12navbar.init();
+                });
+            '}
+        }
+    }
+
+    #! function uie.printItemActions(&actions, id, title)
+    {
+        max_list = 1
+        #$ "input-key"(
+            "id"="#<id>"
+            "data-key"="id"
+            "data-search"="title"
+            "data-text"="title"
+            "data-source-array"='#<to.json(actions)>'
+            "columns"="title"
+            "colcaptions"="#<title>"
+            "box-title-text"="Seleccione una opción"
+            "box-placeholder-text"="Buscar"
+            "box-nodata-text"="No se encontraron resultados"
+            "hidden-input"="false"
+            "control-styles"="#container{ display: none !important; }"
+        ){$""}
+    }
+
+    #! function uie.deleteItems(&list,delete_list)
+    {
+        if trim(delete_list) == "" { return list }
+        ref new_list = list.create()
+
+        ref del_list = split(delete_list,",")
+        
+        for j = 0; j < list.count(list)
+        {
+            add = @true
+            ref obj = list.obj(list, j)
+
+            for i = 0; i < list.count(del_list)
+            {
+                del = list.str(del_list, i)
+                if @@(obj,"$id") == del { add = @false }
+            }
+
+            if add { do list.add(new_list, obj) }
+        }
+
+        return new_list
+    }
+    
+    #! function uie.getMainButtons(&actions, &reports, list)
+    {
+        ref btn_list = list.create()
+        if trim(list) == "" { return btn_list }
+
+        ref id_list = split(list,",")
+        for i = 0; i < list.count(id_list)
+        {
+            id = list.str(id_list,i)
+
+            for m = 0; m < list.count(actions) {
+                ref obj = list.obj(actions, m)
+                if @@(obj,"$id") == id { do list.add(btn_list, obj) }
+            }
+            for m = 0; m < list.count(reports) {
+                ref obj = list.obj(reports, m)
+                if @@(obj,"$id") == id { do list.add(btn_list, obj) }
+            }
+        }
+
+        return btn_list
+    }
+
     // =============== ICONS
     #! text @ICON_ARROW_CLOCKWISE
     {$'
@@ -103,6 +313,37 @@ module
     {$'
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
             <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
+        </svg>
+    '}
+    text @ICON_REPORT
+    {$'
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-bar-graph" viewBox="0 0 16 16">
+            <path d="M10 13.5a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-6a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5zm-2.5.5a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5zm-3 0a.5.5 0 0 1-.5-.5v-2a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5z"/>
+            <path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2M9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5z"/>
+        </svg>
+    '}
+    text @ICON_ACTIONS
+    {$'
+        <svg xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="16" height="16" viewBox="0 0 4.2333332 4.2333335" version="1.1" id="svg2430" inkscape:version="1.0.2-2 (e86c870879, 2021-01-15)" sodipodi:docname="actions_button.svg">
+            <defs id="defs2424" />
+            <sodipodi:namedview id="base" pagecolor="#ffffff" bordercolor="#666666" borderopacity="1.0" inkscape:pageopacity="0.0" inkscape:pageshadow="2" inkscape:zoom="7.9195959" inkscape:cx="31.599426" inkscape:cy="43.429326" inkscape:document-units="px" inkscape:current-layer="layer1" inkscape:document-rotation="0" showgrid="false" units="px" inkscape:window-width="1920" inkscape:window-height="1017" inkscape:window-x="-8" inkscape:window-y="-8" inkscape:window-maximized="1" />
+            <metadata id="metadata2427">
+                <rdf:RDF>
+                    <cc:Work rdf:about="">
+                        <dc:format>image/svg+xml</dc:format>
+                        <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+                        <dc:title></dc:title>
+                    </cc:Work>
+                </rdf:RDF>
+            </metadata>
+            <g inkscape:label="Capa 1" inkscape:groupmode="layer" id="layer1">
+                <g id="g2422" transform="matrix(0.59963394,0,0,0.59963394,-6.1196455,-96.625668)">
+                    <rect style="fill:#404040;stroke:#ffffff;stroke-width:0.189154" id="rect2408" width="2.8108459" height="2.8108456" x="10.741454" y="161.67691" />
+                    <rect style="fill:#404040;stroke:#ffffff;stroke-width:0.189154" id="rect2410" width="2.8108459" height="2.8108456" x="13.916451" y="161.67691" />
+                    <rect style="fill:#404040;stroke:#ffffff;stroke-width:0.189154" id="rect2412" width="2.8108459" height="2.8108456" x="10.741454" y="164.85187" />
+                    <rect style="fill:#404040;stroke:#ffffff;stroke-width:0.189154" id="rect2414" width="2.8108459" height="2.8108456" x="13.916451" y="164.85187" />
+                </g>
+            </g>
         </svg>
     '}
 }
