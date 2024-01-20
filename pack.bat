@@ -24,7 +24,7 @@ mkdir %1
 "C:\Program Files\7-Zip\7z.exe" a -r %1\vendesk.zip ..\vendesk\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\mkplink.zip ..\mkplink\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\ventas.zip ..\ventas\src\*
-"C:\Program Files\7-Zip\7z.exe" a -r %1\gsinternal.zip ..ws-internal-requests\src\*
+"C:\Program Files\7-Zip\7z.exe" a -r %1\gsinternal.zip ..\ws-internal-requests\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\sigesac.zip ..\sigesac\src\*
 
 GOTO EOF
