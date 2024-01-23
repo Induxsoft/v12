@@ -77,15 +77,14 @@ module
                 h5(class="tex-no-break m-0"){$"#<title>"}
             }
             div(class="col-8 d-flex align-items-center justify-content-end p-0 gap-2")
-            {
-                a(href="#" onclick="window.location.reload();" class="btn btn-sm border-secondary induxsoft-corners btn-main-action no-print" title="Refrescar"){$"#<@ICON_ARROW_CLOCKWISE>"}
-                
+            {   
                 #! if not(isnull(buttons)) { that buttons } 
                 
                 if isset("printer") && parse.bool(printer) 
                 {
                     #$ button(class="btn btn-sm border-secondary induxsoft-corners btn-main-action no-print" title="Imprimir" onclick="window.print()"){$"#<@ICON_PRINTER>"}
                 }
+                a(href="#" onclick="window.location.reload();" class="btn btn-sm border-secondary induxsoft-corners btn-main-action no-print" title="Refrescar"){$"#<@ICON_ARROW_CLOCKWISE>"}
                 a(href="#<ub>" target="#<target>" class="btn btn-sm border-secondary induxsoft-corners btn-main-action no-print" title="Salir" id="btn_go_back"){$"#<@ICON_X_LG>"}
             }
         }
