@@ -34,8 +34,9 @@ module
                             ref cols = @@(table_definition,"&columns")
                             go foreach.fobj(index:i, key:key, value:value) with(cols)
                             {
-                                class = ifstr(key!="_actions","","no-print")
-                                #$ "edit-th"("type"="NoEditable" "field"="#<key>" class="#<class>"){$"#<@@(value,'caption')>"}
+                                class = ifstr(parse.bool(@@(value,'no-print')) ,'no-print', '')
+                                tmp = @@(value, 'template')
+                                #$ "edit-th"("type"="NoEditable" "field"="#<key>" "#<ifstr(tmp!='','template','')>"="#<tmp>" class="#<class>"){$"#<@@(value,'caption')>"}
                             }
                         }
                     }
