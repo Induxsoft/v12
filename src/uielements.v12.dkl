@@ -156,16 +156,16 @@ module
                 }
                 
                 #! if not(parse.bool(field.dnum(hidden,"actions",0))) && list.count(actlst) > 0 {
-                    #$ button(class="#<btn_cls> list-action" title="Acciones" list="ik_list_actions"){$"#<@ICON_ACTIONS>"}
+                    #$ button(type="button" class="#<btn_cls> list-action" title="Acciones" list="ik_list_actions"){$"#<@ICON_ACTIONS>"}
                 }
                 #! if not(parse.bool(field.dnum(hidden,"report",0))) && list.count(replst) > 0 {
-                    #$ button(class="#<btn_cls> list-action" title="Reporte" list="ik_list_reports"){$"#<@ICON_REPORT>"}
+                    #$ button(type="button" class="#<btn_cls> list-action" title="Reporte" list="ik_list_reports"){$"#<@ICON_REPORT>"}
                 }
                 #! if not(parse.bool(field.dnum(hidden,"print",0))) {
-                    #$ button(class="#<btn_cls>" title="Imprimir" onclick="window.print()"){$"#<@ICON_PRINTER>"}
+                    #$ button(type="button" class="#<btn_cls>" title="Imprimir" onclick="window.print()"){$"#<@ICON_PRINTER>"}
                 }
                 #! if not(parse.bool(field.dnum(hidden,"refresh",0))) {
-                    #$ button(class="#<btn_cls>" title="Refrescar" onclick="window.location.reload();"){$"#<@ICON_ARROW_CLOCKWISE>"}
+                    #$ button(type="button" class="#<btn_cls>" title="Refrescar" onclick="window.location.reload();"){$"#<@ICON_ARROW_CLOCKWISE>"}
                 }
                 #! if not(parse.bool(field.dnum(hidden,"exit",0))) {
                     #$ a(class="#<btn_cls>" title="Salir" href="#<urlexitbtn>" target="#<url_trg>" id="btn_go_back"){$"#<@ICON_X_LG>"}
