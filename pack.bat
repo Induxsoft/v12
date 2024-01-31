@@ -26,6 +26,7 @@ mkdir %1
 "C:\Program Files\7-Zip\7z.exe" a -r %1\ventas.zip ..\ventas\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\irq.zip ..\ws-internal-requests\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\qa.zip ..\qa\src\*
+"C:\Program Files\7-Zip\7z.exe" a -r %1\catprod.zip ..\catprod\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\sigesac.zip ..\sigesac\src\*
 
 GOTO EOF
