@@ -1,0 +1,14 @@
+﻿#include "dkli.dkh"
+
+#!
+module "ImageMagick"
+{
+    ref @magick=_import_library("Devkron.Magick.dll")
+	
+	do _map_function(@magick, "Devkron.Magick.ImageTools", "Compress", "image.compress","System.String, System.Boolean, System.Boolean","#")
+    do _map_function(@magick, "Devkron.Magick.ImageTools", "Resize", "image.resize","System.String, System.Decimal, System.Decimal","#")
+
+    do _map_function(@magick, "Devkron.Magick.ImageTools", "WichIsNewer", "image.newer","System.String, System.String","#")
+
+    do _map_function(@magick, "Devkron.Magick.ImageTools", "Size", "image.size","System.String","*")
+}
