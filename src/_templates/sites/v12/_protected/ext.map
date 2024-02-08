@@ -1,3 +1,4 @@
 ﻿# Este es un mapa de rutas por extensión
 
-.fso >  $/fso/fso.*.dkl
+.fso >  $fso/fso.*.dkl
+.folderview > $files/fileman/viewfolder.dkl
