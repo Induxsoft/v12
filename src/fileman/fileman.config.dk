@@ -1,0 +1,37 @@
+﻿#include "dkli.dkh"
+#!
+module "Configuración de FileMan"
+{
+    @fileman_websencia_render=@true //Procesar archivo websencia .jsnwm
+    @fileman_basepath="fileman" //No debe terminar la ruta con el caracter /
+    @fileman_viewtrigger="/.folderview"
+    @fileman_props_trigger="/.meta"
+    @fileman_download_trigger="/.download" ///.download
+    @fileman_default_view="icons"   //icons, details, cards
+
+    new @fileman_editor_knowed_ext
+    {
+        @".txt":"/.editcode"
+        @".dk":"/.editcode"
+        @".dkl":"/.editcode"
+        @".dkh":"/.editcode"
+        @".js":"/.editcode"
+        @".json":"/.editcode"
+        @".html":"/.editcode"
+        @".htm":"/.editcode"
+        @".md":"/.editcode"
+        @".css":"/.editcode"
+        @".toc":"/.editcode"
+    }
+
+    @fileman_nodownloadable=".dk,.dkh,.dkl"
+
+    //* ======================================== [ _STATIC RESOURCES ]
+
+    @path_icons = "/$/fileman/icons/"
+    @path_css_fileman = "/$/fileman/css/fileman.css"
+    @path_css_properties = "/$/fileman/css/properties.css"
+    @path_js_fileman = "/$/fileman/js/fileman.js"
+    @path_js_properties = "/$/fileman/js/properties.js"
+    @path_js_handlefiles = "/$/fileman/js/handlefiles.js"
+}

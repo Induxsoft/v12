@@ -1,0 +1,10 @@
+#include "dkli.dkh"
+#!
+module ""
+{
+    #$ div
+    {
+        h1{$"Sitio web vacío"}
+        h1{$"Generado con Devkron"}
+    }
+}

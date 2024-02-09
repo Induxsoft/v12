@@ -1,0 +1,6 @@
+# $ = Recursos estáticos
+# ! = Paquetes
+
+*: /$/{_pack}/{_level1}/{_level2}/{_resource} > ${_pack}/_static/{_level1}/{_level2}/{_resource}
+*: /$/{_pack}/{_level1}/{_resource} > ${_pack}/_static/{_level1}/{_resource}
+*: /$/{_pack}/{_resource} > ${_pack}/_static/{_resource}

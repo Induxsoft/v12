@@ -1,0 +1,15 @@
+#include "dkli.dkh"
+#!
+module ""
+{
+    #include "functions.dkh"
+    #include "serialize.dkh"
+
+    ref headers = @@(@http_context, "&request/headers")
+    do rise_error(0, to.json(headers))
+
+    // if file.extension(@@(headers, "$REQUEST_URI")) == ".folderview"
+    // {
+    //     headers<"DOCUMENT_ROOT">: 
+    // }
+}
