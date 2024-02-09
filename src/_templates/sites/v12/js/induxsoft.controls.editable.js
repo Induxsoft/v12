@@ -96,6 +96,9 @@ class EditTable extends HTMLElement
                     .Editable-Input-Select{
                         display: block;width: 100%;padding: 0.375rem 2.25rem 0.375rem 0.75rem;-moz-padding-start: calc(0.75rem - 3px);font-size: 1rem;font-weight: 400;line-height: 1.5;color: #212529;background-color: #fff;background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");background-repeat: no-repeat;background-position: right 0.75rem center;background-size: 16px 12px;border: none;outline:1px solid #ced4da;-webkit-appearance: none;-moz-appearance: none;appearance: none;
                     }
+                    .Editable-Input-Memo{
+                        resize:none;
+                    }
                     .EdiTable-Button{
                         padding: 2px;
                         background-color: transparent;
@@ -2191,41 +2194,35 @@ class EditTable extends HTMLElement
             dataArray.forEach((data, idx) => 
             {
                 const tr = this._createFullElement('tr', { id: (data[treeOptions.key]??''), parent: (data[treeOptions.parentkey]??''), indent: (data['__level__']??0) });
-                let firstAdded = false;
                 let container = null;
-                thead.querySelectorAll('th').forEach(th => 
+                
+                this.Columns.forEach((column, i) => 
                 {
-                    let coldef = this._getColdefByTh(th);
                     const td = this._createFullElement('td', { class:'EdiTable-Cell' });
+                    tr.appendChild(td);
+                    
+                    let coldf = this.GetColumnDefOfTd(td);
+                    let value = (data[column.field] ?? '');
+                    
+                    let valideEncode = true;
 
-                    if (!firstAdded && this.ShowAsTree)
+                    if(coldf.template) {
+                        valideEncode = false;
+                        value = this.applyTemplate(coldf.template, data);
+                    }
+
+                    if (i==0 && this.ShowAsTree)
                     {
                         container = this._createFullElement('div', { class:'container-cell-content' })
                         const content = this._createFullElement('div', { iscellcontent:'true', class:'cell-content' });
                         container.appendChild(content);
-                        Object.keys(data).forEach(key => {
-                            if (td.textContent == '' && th.getAttribute('field') == key){
-                                let value = data[key];
-                                if (this._withFormat(coldef, value))
-                                    value = this._aplyFormat(coldef, value);
-                                    if (this.htmlEncode) value = this.setHtmlEncode(value);
-                                    content.innerHTML = value;
-                            }
-                        });
                         td.appendChild(container);
-                        firstAdded = true;
                     }
-                    else
-                    {
-                        Object.keys(data).forEach(key => {
-                            if (td.textContent == '' && th.getAttribute('field') == key) {
-                                this.SetTdValue(td, data[key], true);
-                            }
-                        });
-                    }
-                    tr.appendChild(td);
-                    td.style.textAlign = (coldef?.textalign??'');
-                    if (this.onTdPaint) this.onTdPaint(td, idx, this.ColIndexOfTd(td), (coldef?.field??''));
+
+                    this.SetTdValue(td, value, valideEncode, coldf);
+                    
+                    td.style.textAlign = (coldf?.textalign??'');
+                    if (this.onTdPaint) this.onTdPaint(td, idx, this.ColIndexOfTd(td), (coldf?.field??''));
                 });
 
                 if (this.ShowAsTree)
@@ -2566,10 +2563,10 @@ class EditTable extends HTMLElement
     restoreRow(indexRow)
     {
         if (!this._dataArrayBackup) return;
-        let objOrig = this.DataArray[indexRow];
+        
         let objBack = this._dataArrayBackup[indexRow];
         delete objBack.isDirty;
-        objOrig = JSON.parse(JSON.stringify(objBack));
+        this.DataArray[indexRow] = JSON.parse(JSON.stringify(objBack));
         this.UpdateRow(indexRow);
     }
     _count_isdirty=0;
