@@ -37,6 +37,8 @@ class EditTable extends HTMLElement
                         width: 100%;
                         height: 100%;
                         text-align: inherit;
+                        display: flex;
+                        align-items: center;
                         background-color: rgba(255,255,255,.7);
                         cursor: text;
                         border: 1px solid #FFF;
@@ -159,7 +161,7 @@ class EditTable extends HTMLElement
                     .dragging{ background-color: #EDEDED !important; color: #000 !important; border: 0 !important; outline: 0 !important; }
                     .cell-collapsable {  }
                     .collapse-btn { cursor: pointer; }
-                    .cell-content { width: 100%; height: 100%; display: flex; align-items: center; }
+                    .cell-content { width: 100%; height: 100%; display: flex; align-items: center; overflow: hidden; }
                     .hidde-row{ display: none; }
                     .container-cell-content { display: flex; gap:2px; width:-webkit-fill-available; height: 100%; align-items: center;}
 
@@ -230,7 +232,10 @@ class EditTable extends HTMLElement
 
             thead.querySelectorAll('edit-tr').forEach(editTr => editTr.replaceWith(this._replaceTagNameElement(editTr, 'tr')));
             thead.querySelectorAll('tr').forEach(tr => {
-                tr.querySelectorAll('edit-th').forEach(editTh => editTh.replaceWith(this._replaceTagNameElement(editTh, 'th')));
+                tr.querySelectorAll('edit-th').forEach(editTh => {
+                    this._setColumnWith(editTh);
+                    editTh.replaceWith(this._replaceTagNameElement(editTh, 'th'));
+                });
             });
         }
 
@@ -281,6 +286,24 @@ class EditTable extends HTMLElement
         }
 
         return table;
+    }
+    _setColumnWith=(th)=>
+    {
+        if (th)
+        {
+            if(th.hasAttribute('minwidth')){
+                th.style.minWidth = th.getAttribute('minwidth');
+                //th.removeAttribute('minwidth');
+            } 
+            if(th.hasAttribute('maxwidth')){
+                th.style.maxWidth = th.getAttribute('maxwidth');
+                //th.removeAttribute('maxwidth');
+            }
+            if(th.hasAttribute('width')){
+                th.style.width = th.getAttribute('width');
+                //th.removeAttribute('width');
+            }
+        }
     }
     _getColdefByTh=(th)=>
     {
@@ -678,6 +701,9 @@ class EditTable extends HTMLElement
         if (this.hasAttribute('hidde-selector')) this.hiddeSelector = (this.getAttribute('hidde-selector')=='true');
         if (this.hasAttribute('hide-row-selector')) this.hiddeRowSelector = (this.getAttribute('hide-row-selector')=='true');
         if (this.hasAttribute('auto-confirm')) this.autoConfirm = (this.getAttribute('auto-confirm')=='true');
+        if (this.hasAttribute('min-row-height')) this.minRowHeight = this.getAttribute('min-row-height');
+        if (this.hasAttribute('max-row-height')) this.maxRowHeight = this.getAttribute('max-row-height');
+        if (this.hasAttribute('row-height')) this.rowHeight = this.getAttribute('row-height');
     }
     autoConfirm=false;
     _fireBlur=true;
@@ -756,7 +782,8 @@ class EditTable extends HTMLElement
                 RowMoved:"rowmoved",
                 RowChanged:"rowchanged",
                 LostFocus:"lostfocus",
-                IsDirtyChanged:"isdirtychanged"
+                IsDirtyChanged:"isdirtychanged",
+                OnSort:"onsort"
             },
             SelectorId:"__table_selector",
             InputId:"__table_input",
@@ -1085,6 +1112,9 @@ class EditTable extends HTMLElement
     hiddeSelector = false;
     hiddeRowSelector = false;
     htmlEncode = false;
+    minRowHeight = "none";
+    maxRowHeight = "none";
+    rowHeight = "100%";
     
     CSS = {
         Cell:"EdiTable-Cell",
@@ -1397,7 +1427,8 @@ class EditTable extends HTMLElement
                         if (coldef.default!=undefined)
                         {
                             this.UpdateDataMember(indexRow,coldef.field,coldef.default,true)
-                            cell.append(coldef.default);
+                            //cell.append(coldef.default);
+                            this.SetTdValue(cell,coldef.default);
                         }
             }
             const clickFunct = (e) => {
@@ -1733,6 +1764,11 @@ class EditTable extends HTMLElement
             }
         }
 
+        if (Number(columnDef.maxlength??0) && (columnDef.type==this.EdiTable.Const.Columns.Types.Text || columnDef.type==this.EdiTable.Const.Columns.Types.Memo))
+        {
+            if (input) input.setAttribute('maxlength', columnDef.maxlength);
+        }
+
         var eventArgs={
             input:input,
             td:td,
@@ -2063,6 +2099,7 @@ class EditTable extends HTMLElement
     }
     GetTdValue=(td, valideEncode=false)=>
     {
+        if (td && td.tagName.toLowerCase() != 'td') td = td.closest('td');
         let value = td.innerHTML;
         const cellContent = td.querySelector('div[iscellcontent=true]');
         
@@ -2091,13 +2128,35 @@ class EditTable extends HTMLElement
 
         if (valideEncode && this.htmlEncode) value = this.setHtmlEncode(value);
 
-        const cellContent = td.querySelector('div[iscellcontent=true]');
+        let cellContent = td.querySelector('div[iscellcontent=true]');
+        if (!cellContent) cellContent = td.closest('div[iscellcontent=true]');
+        
         if (cellContent)
         {
             cellContent.innerHTML = value;
+            this._setRowSizes(cellContent,coldef);
             return;
         }
-        td.innerHTML = value;
+        else
+        {
+            cellContent = this._createFullElement('div', { iscellcontent:'true', class:'cell-content' });
+            cellContent.innerHTML = value;
+            this._setRowSizes(cellContent,coldef);
+            td.innerHTML = cellContent.outerHTML;
+        }
+        //td.innerHTML = value;
+    }
+    _setRowSizes(cellContent,coldef)
+    {
+        if (cellContent)
+        {
+            cellContent.style.minHeight = this.minRowHeight;
+            cellContent.style.maxHeight = this.maxRowHeight;
+            cellContent.style.height = this.rowHeight;
+            if (coldef?.minwidth) cellContent.style.minWidth = coldef.minwidth;
+            if (coldef?.maxwidth) cellContent.style.maxWidth = coldef.maxwidth;
+            if (coldef?.width) cellContent.style.width = coldef.maxwidth;
+        }
     }
     _withFormat(coldef, value)
     {
@@ -2469,6 +2528,9 @@ class EditTable extends HTMLElement
     {
         if (dataArray && dataArray.length > 0)
         {
+            let orientation = (!desc) ? "ASC" : "DESC";
+            this.OnSort(field,orientation);
+
             dataArray.sort((a,b) => 
             {
                 let valA = (a[field]??'');
@@ -2610,6 +2672,25 @@ class EditTable extends HTMLElement
     {
         let obj = this._dataArrayBackup[indexRow];
         return (obj?.isDirty ?? false);
+    }
+    OnSort = (field, sort) => {
+        if (this._getCurren().Events[this.EdiTable.Const.Events.OnSort]==undefined) return;
+
+        this.Columns.forEach((col) => { delete col.sort });
+        
+        let columnDef = this.Columns.find((col) => { return (col.field === field) });
+        let thead = this.GetTHead();
+        let th = thead.querySelector(`[field=${field}]`);
+        
+        columnDef["sort"] = sort;
+
+        var eventArgs={
+            th:th,
+            coldef:columnDef,
+            caption:th.textContent
+        };
+
+        this._getCurren().Events[this.EdiTable.Const.Events.OnSort](eventArgs);
     }
 }
 
