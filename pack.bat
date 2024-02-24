@@ -29,6 +29,7 @@ mkdir %1
 "C:\Program Files\7-Zip\7z.exe" a -r %1\catprod.zip ..\catprod\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\sitesman.zip ..\sitesman\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\r5iv12.zip ..\r5iv12\src\*
+"C:\Program Files\7-Zip\7z.exe" a -r %1\catfab.zip ..\catfab\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\sigesac.zip ..\sigesac\src\*
 
 GOTO EOF
