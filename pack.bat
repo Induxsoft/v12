@@ -32,7 +32,7 @@ mkdir %1
 "C:\Program Files\7-Zip\7z.exe" a -r %1\catfab.zip ..\catfab\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\rhrs.zip ..\rhrs\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\sigesac.zip ..\sigesac\src\*
-
+"C:\Program Files\7-Zip\7z.exe" a -r %1\stgt_geq.zip ..\STGT_guarderias2024\src\*
 GOTO EOF
 
 :ERROR1
