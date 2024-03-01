@@ -48,7 +48,7 @@ module ""
 
     if not(contains(@@(@http_context,"$request/headers/http_accept"),"html")) { return }
     template='<!DOCTYPE html>
-    <html>
+    <html lang="es-MX">
         <head>
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <meta charset = "utf-8" />
