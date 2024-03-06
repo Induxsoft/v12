@@ -179,7 +179,8 @@ module
                             for i = 0; i < list.count(main_buttons)
                             {
                                 ref btn = list.obj(main_buttons, i)
-                                #$ li{ a(class="#<btn_cls> list-action" title="#<@@(btn,'$title')>" href="#<@@(btn,'$href')>"){$"#<@@(btn,'$title')>"} }
+                                if @@(btn,"$shorttitle")=="" { btn<"shorttitle">:cut(@@(btn,"$title"),25)}
+                                #$ li{ a(class="#<btn_cls> list-action" title="#<@@(btn,'$title')>" href="#<@@(btn,'$href')>"){$"#<@@(btn,'$shorttitle')>"} }
                             }
 
                             div(class="d-flex gap-1")
