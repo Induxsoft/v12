@@ -410,7 +410,7 @@ class InputKey extends HTMLElement
                     {
                         this._search();
                     }
-                    else if (this.accept_data && (this.accept_data[this.getAttribute('data-search') ?? '']) != this.input_search_container.value)
+                    else if (this.accept_data && (this.accept_data[(this.getAttribute('data-search') ?? '').toLowerCase()]) != this.input_search_container.value.toLowerCase())
                     {
                         this.setValue(this.accept_data);
                     }
@@ -548,7 +548,7 @@ class InputKey extends HTMLElement
             if (this.hasAttribute('data-value'))
             {
                 try{
-                    let initvalue = JSON.parse(this.getAttribute('data-value')??'{}');
+                    let initvalue = this.setObjectMinus(JSON.parse(this.getAttribute('data-value')??'{}'));
                     this.setValue(initvalue);
                 }catch{
                     alert('El valor del atributo "data-value" tiene un formato JSON inválido');
@@ -606,7 +606,7 @@ class InputKey extends HTMLElement
 
         this.data.forEach((dt, i) => 
         {
-            const row_tables_conatiner2 = this.createFullElement('tr',{class:'row_table', value:`${dt[this.getAttribute('data-search')]}`, tabindex:`0`});
+            const row_tables_conatiner2 = this.createFullElement('tr',{class:'row_table', value:`${dt[(this.getAttribute('data-search')??'').toLowerCase()]}`, tabindex:`0`});
             row_tables_conatiner2.addEventListener('click', (e) => 
             {
                 e.stopPropagation();
@@ -663,7 +663,7 @@ class InputKey extends HTMLElement
     {
         this.data = null;
         let url = this.getAttribute('data-source');
-
+        id=id.toLowerCase();
         return new Promise(resolve => {
             if (url && id.trim() != "")
             {
@@ -672,7 +672,7 @@ class InputKey extends HTMLElement
                     surl = this.onBeforeSearch(surl);
                 }
                 this.request(surl, (dataSuccess) => {
-                    this.data = dataSuccess;
+                    this.data = this.setObjectListMinus(dataSuccess);
                     this.findValue(id);
                     resolve();
                 }, (dataFail) => {
@@ -681,10 +681,10 @@ class InputKey extends HTMLElement
             }
             else if(this.hasAttribute('data-source-array') && this.getAttribute('data-source-array').trim() != '')
             {
-                try{ this.data = JSON.parse(this.getAttribute('data-source-array')); }
+                try{ this.data = this.setObjectListMinus(JSON.parse(this.getAttribute('data-source-array'))); }
                 catch{ alert('El valor del atributo "data-source-array" tiene un formato JSON inválido'); }
                 if (id && this.data){
-                    this.data = this.data.filter(data => (data[this.getAttribute('data-search')].includes(id) || id=='%'));
+                    this.data = this.data.filter(data => (data[(this.getAttribute('data-search')??'').toLowerCase()].includes(id.toLowerCase()) || id=='%'));
                 }
                 this.findValue(id);
                 resolve();
@@ -696,6 +696,34 @@ class InputKey extends HTMLElement
         });
     }
     /**
+     * Convierte los campos de los objetos de la lista a minúsculas.
+     * @param {Array} list 
+     * @returns Retorna una copia de la lista de objetos con campos convertidos a minúsculas
+     */
+    setObjectListMinus(list)
+    {
+        if (!list) return [];
+
+        let newList = [];
+        list.forEach(obj => {
+            newList.push(this.setObjectMinus(obj));
+        });
+        return newList;
+    }
+    /**
+     * Convierte los campos del objeto a minúsculas.
+     * @param {Object} obj 
+     * @returns Retorna una copia del objeto con campos convertidos a minúsculas
+     */
+    setObjectMinus(obj)
+    {
+        let newObj = {};
+        Object.keys(obj).forEach(key => {
+            newObj[key.toLowerCase()] = obj[key];
+        });
+        return newObj;
+    }
+    /**
      * @param {string} id Cadena con el valor a buscar.
      * @returns Retorna un **elemento** dentro del objeto de datos que coincida con el valor especificado establecido en la propiedad searchData y el identificador proporcionado.
      */
@@ -703,7 +731,7 @@ class InputKey extends HTMLElement
     {
         if (this.data && this.data.length > 0)
         {
-            this.record_selected = this.data.find(d => d[this.getAttribute('data-search')] == id);
+            this.record_selected = this.data.find(d => (d[(this.getAttribute('data-search')??'').toLowerCase()]??'').toLowerCase() == id.toLowerCase());
         }
         return this.record_selected;
     }
@@ -731,10 +759,11 @@ class InputKey extends HTMLElement
         }
         else
         {
-            this.input_search_container.value = (this.accept_data[this.getAttribute('data-search')]??'');
-            this.input_description_container.value = (this.accept_data[this.getAttribute('data-text')]??'');
-            this.setAttribute('value', this.accept_data[this.getAttribute('data-key')]??'');
-            this.inputv.setAttribute('value', this.accept_data[this.getAttribute('data-key')]??'');
+            this.accept_data = this.setObjectMinus(this.accept_data);
+            this.input_search_container.value = (this.accept_data[(this.getAttribute('data-search')??'').toLowerCase()]??'');
+            this.input_description_container.value = (this.accept_data[(this.getAttribute('data-text')??'').toLowerCase()]??'');
+            this.setAttribute('value', this.accept_data[(this.getAttribute('data-key')??'').toLowerCase()]??'');
+            this.inputv.setAttribute('value', this.accept_data[(this.getAttribute('data-key')??'').toLowerCase()]??'');
         }
 
         if (this.change_event)
@@ -918,6 +947,7 @@ class CheckList extends HTMLElement
     canAdd = null;
     showPercents = null;
     hideHeader = false;
+    radioStyle = false;
 
     onItemChanged = null;
     onItemChecked = null;
@@ -966,6 +996,7 @@ class CheckList extends HTMLElement
             this.canAdd =       this._parseBool(this.getAttribute('can-add'), true);
             this.showPercents = this._parseBool(this.getAttribute('show-percents'));
             this.hideHeader =   this._parseBool(this.getAttribute('hide-header'));
+            this.radioStyle =   this._parseBool(this.getAttribute('radio-style'));
 
             this._containerwc = this._createFullElement('div', { id:'CL_container', class:'bordered d-flex flex-column' });
             this._headSection = this._createFullElement('div', { id:'CL_headerSection', class:'p-3 d-flex' });
@@ -1039,14 +1070,16 @@ class CheckList extends HTMLElement
                     .hide-element{ display: none !important; }
                     .disable-element{ pointer-events: none !important; opacity: .5 !important; }
                     .disable-element-op0{ pointer-events: none !important; opacity: 0 !important; }
+                    .disable-element-transparent{ pointer-events: none !important; }
                     .borderxy4{ border-top: 6px solid transparent; border-bottom: 6px solid transparent; }
                     .border-t{ border-top-color: #005CC8; }
                     .border-b{ border-bottom-color: #005CC8; }
                     .dragging{ background-color: #F0F8FF; }
+                    .d-none{ display: none !important; }
 
                     /* ========== List */
                     .list-item-new{ display: grid; grid-template-columns: 1rem 1rem 1fr; gap:4px;}
-                    .list-item{ display: grid; grid-template-columns: 1rem 1rem 1fr 2rem; gap:4px;}
+                    .list-item{ display: grid; grid-template-columns: 1rem auto 1fr 2rem; gap:4px;}
                     .sub-item{ padding-left: 1.6rem; }
                     .hover-item:focus-within{ outline: 1px solid #DDD !important; }
                     .movItem, .delItem{ position: relative; left: -1000rem; }
@@ -1057,6 +1090,12 @@ class CheckList extends HTMLElement
                     #CL_footHeader{ border-top: 1px solid #DDD !important; transition: .3s; }
                     #CL_footHeader:hover{ background-color: #f5f5f5; }
                     .in-done-list .list-item .movItem{ pointer-events: none !important; opacity: 0 !important; }
+                    .container-checks{ display: flex; justify-content: center; align-items: center; gap: 10px; }
+                    .rd-item-yes, rd-item-no{ width: 1rem; height: 1rem; }
+                    .rd-item-yes::before{ content:'Si'; position:relative;top:-16px;left:2px;font-size:.7rem; color:#CCC; }
+                    .rd-item-no::before{ content:'No'; position:relative;top:-16px;font-size:.7rem; color:#CCC; }
+                    .rd-item-yes:hover::before{ color:#000; }
+                    .rd-item-no:hover::before{ color:#000; }
                     `+ (this.getAttribute("control-styles") ?? '') +`
                 </style>
             `;
@@ -1183,15 +1222,20 @@ class CheckList extends HTMLElement
             const rowItem = this._createFullElement('div', { class:'list-item' });
             const movItem = this._createFullElement('button', { class: 'movItem noborder', style: 'background: transparent;', draggable: 'true' });
             const chkItem = this._createFullElement('input', { type:'checkbox' });
+            const rdItemY = this._createFullElement('input', { type:'radio', name:`radio_${params.id}`, title:'Si', class:'rd-item-yes' });
+            const rdItemN = this._createFullElement('input', { type:'radio', name:`radio_${params.id}`, title:'No', class:'rd-item-no' });
             const txtItem = this._createFullElement('input', { type:'text', class:'p-2 noborder w-100 bg-transparent'});
             const delItem = this._createFullElement('button', { class:'delItem noborder bg-transparent d-flex align-items-center justify-content-center' });
             const childIcon = this._createFullElement('div', { style:'position:absolute; top: 5px; left: 2px;', class:'hide-element'});
-            
+            const cntnrChks = this._createFullElement('div', { class:'container-checks' });
+
             childIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="#005CC8" class="bi bi-arrow-right-short" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"/></svg>`;
             movItem.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#888" class="bi bi-three-dots-vertical" viewBox="0 0 16 16"><path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/></svg>`;
             delItem.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/></svg>`;
             txtItem.value = item.text;
             chkItem.checked = (item.done ?? false);
+            rdItemY.checked = (item.done ?? false);
+            rdItemN.checked = (!item.done ?? true);
             containerItem.setAttribute('item-text', item.text);
             containerItem.setAttribute('item-done', chkItem.checked);
 
@@ -1201,18 +1245,42 @@ class CheckList extends HTMLElement
                 containerItem.setAttribute('parent-id', params.parentId);
             }
 
-            if (chkItem.checked && this.locked) chkItem.classList.add('disable-element');
+            if (chkItem.checked && this.locked) cntnrChks.classList.add('disable-element');
             if (!this.canRemove) delItem.classList.add('hide-element');
-            if (!this.canEdit) txtItem.classList.add('disable-element');
+            if (!this.canEdit) txtItem.classList.add('disable-element-transparent');
             if (!this.canMove) movItem.classList.add('disable-element-op0');
-            if (!this.canCheck) chkItem.classList.add('disable-element');
+            if (!this.canCheck) cntnrChks.classList.add('disable-element');
+
+            chkItem.classList.toggle('d-none', this.radioStyle);
+            rdItemY.classList.toggle('d-none', !this.radioStyle);
+            rdItemN.classList.toggle('d-none', !this.radioStyle);
+
+            cntnrChks.append(chkItem);
+            cntnrChks.append(rdItemY);
+            cntnrChks.append(rdItemN);
 
             rowItem.appendChild(movItem);
-            rowItem.appendChild(chkItem);
+            rowItem.appendChild(cntnrChks);
             rowItem.appendChild(txtItem);
             rowItem.appendChild(delItem);
             containerItem.appendChild(rowItem);
             containerItem.appendChild(childIcon);
+
+            const verifyCheckItem = () => 
+            {
+                containerItem.setAttribute('item-done', chkItem.checked);
+                this._addOrUpdateItem(containerItem);
+                this._refreshView();
+                
+                if (chkItem.checked && this.onItemChecked)
+                {
+                    let item = this.getItem((containerItem.getAttribute('item-id')??''))
+                    this.onItemChecked(item);
+                }
+
+                if (chkItem.checked && this.locked)
+                    cntnrChks.classList.add('disable-element');
+            }
 
             delItem.addEventListener('click', () => {
                 this._addOrUpdateItem(containerItem, true);
@@ -1225,153 +1293,154 @@ class CheckList extends HTMLElement
                 }
             });
             chkItem.addEventListener('click', () => {
-                containerItem.setAttribute('item-done', chkItem.checked);
-                this._addOrUpdateItem(containerItem);
-                this._refreshView();
-                if (chkItem.checked && this.onItemChecked)
-                {
-                    let item = this.getItem((containerItem.getAttribute('item-id')??''))
-                    this.onItemChecked(item);
-                }
-                if (chkItem.checked && this.locked)
-                    chkItem.classList.add('disable-element');
+                verifyCheckItem();
+            });
+            rdItemY.addEventListener('change', () => {
+                chkItem.checked = rdItemY.checked;
+                verifyCheckItem();
+            });
+            rdItemN.addEventListener('change', () => {
+                chkItem.checked = (!rdItemN.checked);
+                verifyCheckItem();
             });
 
-
-            containerItem.addEventListener('dragstart', (e) => {
-                this._draggingItem = containerItem;
-                e.dataTransfer.setData('text/plain', containerItem.getAttribute('item-id'));
-                containerItem.classList.add('dragging');
-                let item = this.getItem(containerItem.getAttribute('item-id'));
-                if (item && item.items && item.items.length > 0)
-                {
-                    this._bodySection.childNodes.forEach(itemList => {
-                        item.items.forEach(item => {
-                            if (item.id == itemList.getAttribute('item-id'))
-                                itemList.classList.add('disable-element');
+            if (this.canMove)
+            {
+                containerItem.addEventListener('dragstart', (e) => {
+                    this._draggingItem = containerItem;
+                    e.dataTransfer.setData('text/plain', containerItem.getAttribute('item-id'));
+                    containerItem.classList.add('dragging');
+                    let item = this.getItem(containerItem.getAttribute('item-id'));
+                    if (item && item.items && item.items.length > 0)
+                    {
+                        this._bodySection.childNodes.forEach(itemList => {
+                            item.items.forEach(item => {
+                                if (item.id == itemList.getAttribute('item-id'))
+                                    itemList.classList.add('disable-element');
+                            });
                         });
-                    });
-                }
-            });
-            containerItem.addEventListener('dragend', () => {
-                containerItem.classList.remove('dragging');
-                this._draggingItem = null;
-                let item = this.getItem(containerItem.getAttribute('item-id'));
-                if (item && item.items && item.items.length > 0)
-                {
-                    this._bodySection.childNodes.forEach(itemList => {
-                        item.items.forEach(item => {
-                            if (item.id == itemList.getAttribute('item-id'))
-                                itemList.classList.remove('disable-element');
-                        });
-                    });
-                }
-            })
-            containerItem.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                if (containerItem.classList.contains('in-done-list')) return;
-                if (this._draggingItem && containerItem.getAttribute('item-id') == this._draggingItem.getAttribute('item-id')) return;
-                const rect = containerItem.getBoundingClientRect();
-                const limity = (rect.y + (rect.height / 2));
-                const limitx = (rect.x + (rect.width / 5))
-
-                let y = (e.clientY < limity);
-                let x = (!y && e.clientX > limitx);
-
-                containerItem.classList.toggle('border-b', !y);
-                containerItem.classList.toggle('border-t', y);
-                if ((containerItem.getAttribute('parent-id')??'') == '')
-                {
-                    containerItem.classList.toggle('bg-light-gray', x);
-                    childIcon.classList.toggle('hide-element', !x);
-                }
-
-                this._topPositionDragEvent = y;
-                this._isChildItemDragEvent = x;
-            });
-            containerItem.addEventListener('dragleave', (e) => {
-                containerItem.classList.remove('border-b');
-                containerItem.classList.remove('border-t');
-                containerItem.classList.remove('bg-light-gray');
-                childIcon.classList.add('hide-element');
-            });
-            containerItem.addEventListener('drop', (e) => {
-                e.preventDefault();
-                if (containerItem.classList.contains('in-done-list')) return;
-                containerItem.classList.remove('border-b');
-                containerItem.classList.remove('border-t');
-                containerItem.classList.remove('bg-light-gray');
-                childIcon.classList.add('hide-element');
-
-                let itemId = e.dataTransfer.getData("text");
-                let itemDrop = null;
-                this._bodySection.childNodes.forEach(item => {
-                    if (item.getAttribute('item-id') == itemId)
-                        itemDrop = item;
+                    }
                 });
-
-                if (itemDrop && containerItem.getAttribute('item-id') == itemDrop.getAttribute('item-id')) return;
-
-                if (itemDrop)
-                {
-                    itemDrop.classList.remove('dragging');
-
-                    let index = 0;
-                    let sourceItem = this.getItem(itemDrop.getAttribute('item-id'), false);
-                    
-                    if (sourceItem)
+                containerItem.addEventListener('dragend', () => {
+                    containerItem.classList.remove('dragging');
+                    this._draggingItem = null;
+                    let item = this.getItem(containerItem.getAttribute('item-id'));
+                    if (item && item.items && item.items.length > 0)
                     {
-                        if (sourceItem.subindex != undefined) 
-                            this.data.items[sourceItem.subindex].items.splice(sourceItem.index, 1);
-                        else
-                            this.data.items.splice(sourceItem.index, 1);
+                        this._bodySection.childNodes.forEach(itemList => {
+                            item.items.forEach(item => {
+                                if (item.id == itemList.getAttribute('item-id'))
+                                    itemList.classList.remove('disable-element');
+                            });
+                        });
                     }
-
-                    let targetItem = this.getItem(containerItem.getAttribute('item-id'), false);
-                    
-                    if (!this._topPositionDragEvent)
-                        index = 1;
-                    
-                    if (targetItem)
+                })
+                containerItem.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    if (containerItem.classList.contains('in-done-list')) return;
+                    if (this._draggingItem && containerItem.getAttribute('item-id') == this._draggingItem.getAttribute('item-id')) return;
+                    const rect = containerItem.getBoundingClientRect();
+                    const limity = (rect.y + (rect.height / 2));
+                    const limitx = (rect.x + (rect.width / 5))
+    
+                    let y = (e.clientY < limity);
+                    let x = (!y && e.clientX > limitx);
+    
+                    containerItem.classList.toggle('border-b', !y);
+                    containerItem.classList.toggle('border-t', y);
+                    if ((containerItem.getAttribute('parent-id')??'') == '')
                     {
-                        index += targetItem.index;
-                        delete sourceItem.index;
-                        delete sourceItem.subindex;
-
-                        if (targetItem.subindex != undefined)
-                        {
-                            let subitemsSource = JSON.parse(JSON.stringify(sourceItem.items ?? []));
-                            if (subitemsSource && subitemsSource.length > 0)
-                                delete sourceItem.items;
-                            this.data.items[targetItem.subindex].items.splice(index, 0, sourceItem);
-                            subitemsSource.forEach(subitem => {
-                                index ++;
-                                this.data.items[targetItem.subindex].items.splice(index, 0, subitem);
-                            });
-                        }
-                        else if (this._isChildItemDragEvent)
-                        {
-                            let subitems = (this.data.items[targetItem.index].items??[]);
-                            let subitemsSource = JSON.parse(JSON.stringify(sourceItem.items ?? []));
-                            if (subitemsSource && subitemsSource.length > 0)
-                                delete sourceItem.items;
-                            subitems.unshift(sourceItem);
-                            let _index = 0;
-                            subitemsSource.forEach(subitem => {
-                                _index ++;
-                                subitems.splice(_index, 0, subitem);
-                            });
-                            this.data.items[targetItem.index].items = subitems;
-                        }
-                        else
-                        {
-                            this.data.items.splice(index, 0, sourceItem);
-                        }
-                        if (this.onItemMoved) this.onItemMoved(sourceItem);
+                        containerItem.classList.toggle('bg-light-gray', x);
+                        childIcon.classList.toggle('hide-element', !x);
                     }
-                }
-                this._refreshView();
-            });
+    
+                    this._topPositionDragEvent = y;
+                    this._isChildItemDragEvent = x;
+                });
+                containerItem.addEventListener('dragleave', (e) => {
+                    containerItem.classList.remove('border-b');
+                    containerItem.classList.remove('border-t');
+                    containerItem.classList.remove('bg-light-gray');
+                    childIcon.classList.add('hide-element');
+                });
+                containerItem.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    if (containerItem.classList.contains('in-done-list')) return;
+                    containerItem.classList.remove('border-b');
+                    containerItem.classList.remove('border-t');
+                    containerItem.classList.remove('bg-light-gray');
+                    childIcon.classList.add('hide-element');
+    
+                    let itemId = e.dataTransfer.getData("text");
+                    let itemDrop = null;
+                    this._bodySection.childNodes.forEach(item => {
+                        if (item.getAttribute('item-id') == itemId)
+                            itemDrop = item;
+                    });
+    
+                    if (itemDrop && containerItem.getAttribute('item-id') == itemDrop.getAttribute('item-id')) return;
+    
+                    if (itemDrop)
+                    {
+                        itemDrop.classList.remove('dragging');
+    
+                        let index = 0;
+                        let sourceItem = this.getItem(itemDrop.getAttribute('item-id'), false);
+                        
+                        if (sourceItem)
+                        {
+                            if (sourceItem.subindex != undefined) 
+                                this.data.items[sourceItem.subindex].items.splice(sourceItem.index, 1);
+                            else
+                                this.data.items.splice(sourceItem.index, 1);
+                        }
+    
+                        let targetItem = this.getItem(containerItem.getAttribute('item-id'), false);
+                        
+                        if (!this._topPositionDragEvent)
+                            index = 1;
+                        
+                        if (targetItem)
+                        {
+                            index += targetItem.index;
+                            delete sourceItem.index;
+                            delete sourceItem.subindex;
+    
+                            if (targetItem.subindex != undefined)
+                            {
+                                let subitemsSource = JSON.parse(JSON.stringify(sourceItem.items ?? []));
+                                if (subitemsSource && subitemsSource.length > 0)
+                                    delete sourceItem.items;
+                                this.data.items[targetItem.subindex].items.splice(index, 0, sourceItem);
+                                subitemsSource.forEach(subitem => {
+                                    index ++;
+                                    this.data.items[targetItem.subindex].items.splice(index, 0, subitem);
+                                });
+                            }
+                            else if (this._isChildItemDragEvent)
+                            {
+                                let subitems = (this.data.items[targetItem.index].items??[]);
+                                let subitemsSource = JSON.parse(JSON.stringify(sourceItem.items ?? []));
+                                if (subitemsSource && subitemsSource.length > 0)
+                                    delete sourceItem.items;
+                                subitems.unshift(sourceItem);
+                                let _index = 0;
+                                subitemsSource.forEach(subitem => {
+                                    _index ++;
+                                    subitems.splice(_index, 0, subitem);
+                                });
+                                this.data.items[targetItem.index].items = subitems;
+                            }
+                            else
+                            {
+                                this.data.items.splice(index, 0, sourceItem);
+                            }
+                            if (this.onItemMoved) this.onItemMoved(sourceItem);
+                        }
+                    }
+                    this._refreshView();
+                });
+            }
         }
 
         return containerItem;
@@ -2507,6 +2576,7 @@ class MediaList extends HTMLElement
     highlightFirst = true;
     mediaProp = 'url';
     miniatureProp = 'mini';
+    labelProp = '';
     removeOnMove = true;
     backColorMedia = '#FFF';
     outlineSelected = false;
@@ -2541,7 +2611,7 @@ class MediaList extends HTMLElement
                 <style>
                     .bordered{ outline: 1px solid #DDD; }
                     .w-100{ width: 100%; } .h-100{ height: 100%; }
-                    .p-1{ padding: 4px; } .p-2{ padding: 8px; } .p-3{ padding: 12px; } .p-4{ padding: 16px; } .p-5{ padding: 32px; }
+                    .p-05 { padding: 2px; } .p-1{ padding: 4px; } .p-2{ padding: 8px; } .p-3{ padding: 12px; } .p-4{ padding: 16px; } .p-5{ padding: 32px; }
                     .ps-1{ padding-left: 4px; }.ps-2{ padding-left: 8px; }.ps-3{ padding-left: 12px; }.ps-4{ padding-left: 16px; }.ps-5{ padding-left: 32px; }
                     .pe-1{ padding-right: 4px; }.pe-2{ padding-right: 8px; }.pe-3{ padding-right: 12px; }.pe-4{ padding-right: 16px; }.pe-5{ padding-right: 32px; }
                     
@@ -2549,8 +2619,12 @@ class MediaList extends HTMLElement
                     .media-item { border: 8px solid transparent; transition: .5s; position:relative; position: relative; }
                     .dragging { border: 24px solid transparent; }
                     .dragging .img { box-shadow: 4px 4px 8px 0 #DDD !important; }
-                    .btn-delete { cursor:pointer; position:absolute; background-color: #FFF; opacity: .3; bottom: 8px; right: 8px; display:flex; align-items:center; }
-                    .btn-delete:hover { opacity: 1; }
+                    .btn-delete { cursor:pointer; margin: 4px 4px 4px 0; display: flex; align-items:center; justify-content: center; }
+                    .label-img { margin: 4px 0px 4px 4px; text-wrap: nowrap; overflow: hidden; text-overflow: ellipsis; flex-grow: 1; font-size: 14px; }
+                    .btn-delete, .label-img{ opacity: .9; background-color: #FFF; color: #000; }
+                    .btn-delete:hover, .label-img:hover { opacity: 1; }
+                    /* .label-img:hover{ position: absolute; left:0; text-wrap:wrap; bottom: 0; } */
+                    .container-controls{ display: flex; justify-content: end; gap: 4px; position:absolute; bottom: 0px; right: 0px; width: 100%;}
                     .border-l { border-left: 24px solid transparent !important; border-top: 24px solid transparent !important; }
                     .border-r { border-right: 24px solid transparent !important; border-bottom: 24px solid transparent !important; }
                     .highlight { border-color: #E2F2FF; }
@@ -2600,13 +2674,23 @@ class MediaList extends HTMLElement
         const imgi = this._createFullElement('div', { class:'w-100 h-100 img bordered'});
 
         const container = this._createFullElement('div', { class:'media-item', draggable:'true', data: JSON.stringify(item), id: item[this._key_id] });
+        const containerControls = this._createFullElement('div', { class:'container-controls' });
         container.appendChild(imgi);
+        imgi.appendChild(containerControls);
+
+        if (this.labelProp != '')
+        {
+            const text = (item[this.labelProp] ?? '')
+            const label = this._createFullElement('small', { class:'p-05 label-img', title:text });
+            label.textContent = text;
+            containerControls.appendChild(label);
+        }
 
         if (this.canDelete)
         {
-            let btnDelete = this._createFullElement('div', { class:'p-1 btn-delete', title:'Eliminar' });
+            let btnDelete = this._createFullElement('div', { class:'p-05 btn-delete', title:'Eliminar' });
             btnDelete.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-trash" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5Zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5Zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6Z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1ZM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118ZM2.5 3h11V2h-11v1Z"/></svg>';
-            imgi.appendChild(btnDelete);
+            containerControls.appendChild(btnDelete);
             btnDelete.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.contanr.removeChild(container);
@@ -2633,6 +2717,7 @@ class MediaList extends HTMLElement
         this.highlightFirst = this._parseBool((this.getAttribute('highlight-first') ?? 'true'), true);
         this.mediaProp = (this.getAttribute('media-prop') ?? 'url');
         this.miniatureProp = (this.getAttribute('miniature-prop') ?? 'mini');
+        this.labelProp = (this.getAttribute('label-prop') ?? '');
         this.backColorMedia = (this.getAttribute('back-color-media') ?? '#FFF');
         this.outlineSelected = this._parseBool((this.getAttribute('outline-selected') ?? 'false'), false);
         let maxsize = (this.getAttribute('max-size-media') ?? '');
@@ -3137,7 +3222,7 @@ class FilterDateRange extends HTMLElement
             const shadow = this.attachShadow({ mode: 'closed' });
             this._writeStyles(shadow);
 
-            this._container = this._createFullElement('div', { id: 'FDR_container', class: 'border d-flex align-items-center gap-2' });
+            this._container = this._createFullElement('div', { id: 'FDR_container', class: 'border d-flex align-items-center gap-1' });
             this._field_va1 = this._createFullElement('input', { type: 'hidden', id: 'FDR_ipt_v1' });
             this._field_va2 = this._createFullElement('input', { type: 'hidden', id: 'FDR_ipt_v2' });
             this._field_mod = this._createFullElement('input', { type: 'hidden', id: 'FDR_ipt_md', name: (this.getAttribute('mode-field') ?? '') });
@@ -3146,7 +3231,7 @@ class FilterDateRange extends HTMLElement
             const panel_monthly = this._createFullElement('div', { id: 'FDR_pnl_monthly', class:'grow-1 panel' });
             const panel_range = this._createFullElement('div', { id: 'FDR_pnl_range', class:'grow-1 panel d-none' });
 
-            const select_mode = this._createFullElement('select', { id: 'FDR_sel_mode', class: 'induxsoft-form-select no-border' });
+            const select_mode = this._createFullElement('select', { id: 'FDR_sel_mode', class: 'induxsoft-form-select' });
             panel_mode.appendChild(select_mode);
 
             this._container.appendChild(panel_mode);
@@ -3184,26 +3269,43 @@ class FilterDateRange extends HTMLElement
                 .d-flex{ display: flex; }
                 .grow-1{ flex-grow: 1; }
                 .wrap{ flex-wrap: wrap; }
-                .gap-1{gap:4px;} .gap-2{gap:8px;}
+                .gap-1{gap:5px;} .gap-2{gap:8px;}
                 .border{ border: 1px solid #ced4da; }
                 .no-border{ border: none !important; outline: none !important; }
                 .d-none{ display: none; }
                 .align-items-center{ align-items: center; }
                 .active-month { background-color: #005CC8 !important; color: #FFF !important; }
-                .input-date{ font-size: .9rem; }
-                .input-date:focus{ border-bottom: 1px solid #005CC8 !important; }
+                .input-date{ font-size: .9rem !important; }
+                .input-date:focus{ outline: 2px solid #005CC8 !important; }
                 .fz-9{ font-size: .9rem; }
+                /*#FDR_container{ background-color: #EDEDED; }*/
+                #FDR_div_datef,#FDR_div_datet{ background-color:#FFF; padding-left: 4px;}
+                #FDR_div_months{ display: grid; grid-template-columns: repeat(12, minmax(1rem, 6rem)); }
+                .month-button{text-overflow: ellipsis;overflow: hidden;width: auto;}
                 .induxsoft-form-control{ border: none; outline: 1px solid #ced4da; display: block; width: 100%; padding: 0.375rem 0.75rem !important; font-size: 1rem; font-weight: 400; line-height: 1.5; color: #212529; background-color: #fff; background-clip: padding-box; appearance: none; transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
                 .induxsoft-form-control:disabled, .induxsoft-form-control[readonly] { background-color: #e9ecef; opacity: 1; }
                 .induxsoft-buttons{ font-weight: 400;line-height: 1.5;color: #212529;text-align: center;text-decoration: none;vertical-align: middle;cursor: pointer;-webkit-user-select: none;-moz-user-select: none;user-select: none;background-color: #FFF;outline:1px solid #ced4da;border: none;padding: 0.375rem 0.75rem;font-size: 1rem;transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; }
                 .induxsoft-buttons:hover{ color: #212529;background-color: #F5F5F5; }
                 .induxsoft-form-select { display: block; width: 100%; padding: 0.375rem 2.25rem 0.375rem 0.75rem !important; -moz-padding-start: calc(0.75rem - 3px); font-size: 1rem; font-weight: 400; line-height: 1.5; color: #212529; background-color: #fff; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 16px 12px; border: none; outline: 1px solid #ced4da; -webkit-appearance: none; -moz-appearance: none; appearance: none; }
+                #FDR_month_select{ display: none; }
+
+                @media screen and (max-width:768px){
+                    #FDR_div_months{
+                        grid-template-columns: auto;
+                        & .month-button{
+                            display: none;
+                        }
+                        & #FDR_month_select{
+                            display: initial;
+                        }
+                    }
+                }
             <style>
         `;
     }
     _fillSelectMode(select)
     {
-        let opt = this._createFullElement('option', { value: 'month' }, (this.getAttribute('label-months') ?? 'Ver por cada mes'));
+        let opt = this._createFullElement('option', { value: 'month' }, (this.getAttribute('label-months') ?? 'Por mes'));
         select.appendChild(opt);
 
         let lastDays = (this.getAttribute('lastdays-options') ?? '').split(',');
@@ -3225,9 +3327,7 @@ class FilterDateRange extends HTMLElement
             if (this._field_mod.value == 'lastdays')
             {
                 this._setFieldValues({ name: range_field, value: select.value }, null);
-                this._selection = {};
-                this._selection[this._field_mod.name] = 'lastdays';
-                this._selection[range_field] = select.value;
+                this._setTisSelection({[this._field_mod.name]: 'lastdays', [range_field]: select.value});
                 if (this._isAutoSubmit())
                     this._submitFilter();
             }
@@ -3270,7 +3370,7 @@ class FilterDateRange extends HTMLElement
 
         const container = this._createFullElement('div', { id: 'FDR_cont_montly', class: 'd-flex align-items-center' });
         const div_years = this._createFullElement('div', { id: 'FDR_div_years', class: 'd-flex' });
-        const div_months = this._createFullElement('div', { id: 'FDR_div_months', class: 'd-flex grow-1 wrap' });
+        const div_months = this._createFullElement('div', { id: 'FDR_div_months', class: 'grow-1' });
 
         const yearfield = (this.getAttribute('year-field') ?? 'year');
         const monthfield = (this.getAttribute('month-field') ?? 'month');
@@ -3291,10 +3391,7 @@ class FilterDateRange extends HTMLElement
 
         select_year.addEventListener('change', e => { 
             this._setFieldValues(select_year, input_mont);
-            this._selection = {};
-            this._selection[this._field_mod.name] = 'month';
-            this._selection[yearfield] = select_year.value;
-            this._selection[monthfield] = input_mont.value;
+            this._setTisSelection({[this._field_mod.name]: 'month', [yearfield]: select_year.value, [monthfield]: input_mont.value});
             if (this._isAutoSubmit())
                 this._submitFilter();
         });
@@ -3311,6 +3408,9 @@ class FilterDateRange extends HTMLElement
             this._setFieldValues(select_year, input_mont);
         }
 
+        const month_select = this._createFullElement('select', { id:'FDR_month_select', class:'induxsoft-form-select' });
+        let select_template = ``;
+
         let names = (this.getAttribute('month-names') ?? 'Enero,Febrero,Marzo,Abril,Mayo,Junio,Julio,Agosto,Septiembre,Octubre,Noviembre,Diciembre').split(',');
         for (let i = 1; i <= 12; i++) {
             let oc = ((Number((input_mont.value ?? '-1')) != i) ? '' : 'active-month');
@@ -3320,13 +3420,25 @@ class FilterDateRange extends HTMLElement
                 active_month(month);
                 input_mont.value = month.getAttribute('value');
                 this._setFieldValues(select_year, input_mont);
-                this._selection = {};
-                this._selection[this._field_mod.name] = 'month';
-                this._selection[yearfield] = select_year.value;
-                this._selection[monthfield] = input_mont.value;
+                this._setTisSelection({[this._field_mod.name]:'month', [yearfield]: select_year.value, [monthfield]: input_mont.value});
                 if (this._isAutoSubmit())
                     this._submitFilter();
             }
+
+            select_template+=`
+                <option value="${i}" ${(oc=='active-month'?'selected':'')}>${(names[i-1] ?? '')}</option>
+            `;
+        }
+
+        month_select.innerHTML = select_template;
+        div_months.appendChild(month_select);
+
+        month_select.onchange = e => {
+            input_mont.value = month_select.value;
+            this._setFieldValues(select_year, input_mont);
+            this._setTisSelection({[this._field_mod.name]:'month', [yearfield]: select_year.value, [monthfield]: input_mont.value});
+            if (this._isAutoSubmit())
+                this._submitFilter();
         }
 
         container.appendChild(div_years);
@@ -3337,7 +3449,7 @@ class FilterDateRange extends HTMLElement
     {
         panel.innerHTML = '';
 
-        const container = this._createFullElement('div', { id: 'FDR_cont_range', class: 'd-flex gap-2 align-items-center' });
+        const container = this._createFullElement('div', { id: 'FDR_cont_range', class: 'd-flex gap-1 align-items-center wrap' });
 
         const div_datef = this._createFullElement('div', { id: 'FDR_div_datef', class: 'd-flex align-items-center gap-2' }, `<small class="text-secondary">${ (this.getAttribute('label-from') ?? 'Desde:') }</small>`);
         const div_datet = this._createFullElement('div', { id: 'FDR_div_datet', class: 'd-flex align-items-center gap-2' }, `<small class="text-secondary">${ (this.getAttribute('label-to') ?? 'Hasta:') }</small>`);
@@ -3400,10 +3512,7 @@ class FilterDateRange extends HTMLElement
         btn_accept.onclick = () => {
             edit_dates(false);
             this._setFieldValues(input_datef, input_datet);
-            this._selection = {};
-            this._selection[this._field_mod.name] = 'range';
-            this._selection[name_datef] = input_datef.value;
-            this._selection[name_datet] = input_datet.value;
+            this._setTisSelection({[this._field_mod.name]:'range', [name_datef]: input_datef.value, [name_datet]: input_datet.value});
             if (this._isAutoSubmit())
                 this._submitFilter();
         }
@@ -3440,6 +3549,12 @@ class FilterDateRange extends HTMLElement
     _isAutoSubmit()
     {
         return ((this.getAttribute('auto-submit') ?? 'false') == 'true');
+    }
+    _setTisSelection(obj){
+        this._selection = {};
+        Object.keys(obj??{}).forEach(k=>{
+            this._selection[k]=obj[k];
+        });
     }
 }
 
