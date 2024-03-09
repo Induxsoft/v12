@@ -1,0 +1,163 @@
+#include "dkli.dkh"
+#!
+program "createpack"
+{
+    #include "functions.dkh"
+    #include "serialize.dkh"
+
+
+    @templates_path="_templates/v12/"
+    @app_template="app_"
+
+    copydir::source,dest
+    {
+        ref files=list.files(source,"*.*")
+        ref dirs=list.dirs(source)
+
+        do dir.ensure(dest)
+
+        for i=0;i<@count(files)
+        {
+            filedest=path.concat(dest, file.name(list.str(files,i)))
+            do file.copy(list.str(files,i),filedest)
+            do print(filedest)
+            exception
+            {
+                do print(last_error())
+            }
+        }
+        for i=0;i<@count(dirs)
+        {
+            dirdest=path.concat(dest, file.name(list.str(dirs,i)))
+            do copydir(list.str(dirs,i),dirdest)
+        }
+    }
+
+    print_error::err
+    {
+        do print("")
+        do print("-  ERROR -")
+        do print(err)
+        do print("------------------------------------------------------------")
+        do print("")
+        do print("- USO DE LA HERRAMIENTA -")
+        do print("./dkl createapp tipo paquete entidad")
+        do print("    o")
+        do print('./dkl createapp tipo paquete "entidad:alias"')
+        do print("")
+        do print("Ejemplo:")
+        do print('\t./dkl createapp crudl mipaquete "dped:documentos-pendientes"')
+        do print("Donde:")
+        do print("\t tipo=Es el nombre de una plantilla de tipo de aplicación de V12")
+        do print("\t paquete=Es el nombre de un paquete de V12")
+        do print("\t entidad=Es el nombre de una entidad del esquema de base de datos")
+        do print("\t alias=Es un alias de enrutamiento que se corresponde al nombre de aplicación (en la url)")
+        do print("------------------------------------------------------------")
+    }
+
+    arg1=""
+    
+    codeblock
+    {
+        ref args=list.create_from_fields( commandline("=") )
+        arg1=trim(list.str(args,1))
+        arg2=trim(list.str(args,2))
+        arg3=trim(list.str(args,3))
+        exception{}
+    }
+
+    if arg1=="" 
+    { 
+        do rise_error(0,"Faltan parámetros. Debe indicar el nombre del paquete")
+    }
+
+    if arg2=="" 
+    { 
+        do rise_error(0,"Faltan parámetros. Debe indicar el nombre del tipo de plantilla de aplicación")
+    }
+
+    if arg3=="" 
+    { 
+        do rise_error(0,"Faltan parámetros. Debe indicar el nombre de la entidad")
+    }
+
+    @app_template=@app_template+trim(arg1)
+
+    entity=arg3
+    route_alias=entity
+
+    if contains(arg3,":")
+    {
+        entity=trim(list.str(split(arg3,":"),0))
+        route_alias=trim(list.str(split(arg3,":"),1))
+        exception{}
+    }
+    
+    source=path.concat(@templates_path, @app_template)
+    packdir="./"+arg2
+    target=packdir+"/"+entity
+    routes_file=path.concat(packdir,"routes.json")
+    pattern_string="/_program/"
+
+    if not(dir.exists(source))
+    {
+        do rise_error(0,"No existe la plantilla indicada:"+source)
+    }
+
+    do copydir(source,target)
+
+    ref routes=list.create()
+    if file.exists(routes_file)
+    {
+        ref routes=from.json(file.rtext(routes_file))
+    }
+
+    ref pattern=@null
+    for i=0;i<@count(routes)
+    {
+        ref p=@item(routes,i)
+        if @@(p,"$pattern")==pattern_string
+        {
+            ref pattern=p
+            break
+        }
+    }
+
+    if isnull(pattern)
+    {
+        ref pattern=record.create()
+        pattern<"pattern">:pattern_string
+        pattern<"routes*">:list.create()
+        do list.add(routes,pattern)
+    }
+
+    ref pattern_routes=@@(pattern,"&routes")
+    ref route=@null
+
+    for i=0;i<@count(pattern_routes)
+    {
+        ref r=@item(pattern_routes,i)
+        if @@(r,"$route")=="/"+route_alias+"/" && @@(r,"$entity_type")==entity
+        {
+            ref route=r
+            break
+        }
+    }
+
+
+    if isnull(route)
+    {
+        ref route=record.create()
+        route<"route">:"/"+route_alias+"/"
+        route<"entity_type">:entity
+        do list.add(pattern_routes,route)
+    }
+
+    do file.wtext(routes_file,to.json(routes))
+    
+    exception
+    {
+        do print_error(last_error())
+    }
+    
+}
