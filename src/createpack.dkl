@@ -63,6 +63,14 @@ model "erp.cxc"
         do print("------------------------------------------------------------")
     }
 
+    replace_on_entrypoint:: code, packid
+    {
+        code=replace(code,'@base_path = ""','@base_path = "'+tolower(packid)+'"')
+        code=replace(code,"@packid",tolower(packid))
+
+        return code
+    }
+
     arg1=""
     
     codeblock
@@ -89,6 +97,10 @@ model "erp.cxc"
 
     //Crear el archivo ddm vacío
     do file.wtext(path.concat(target,"_install/ddm/"+arg1+".ddm"),@schema_ddm)
+
+    //Copiar y reemplazar el nombre de la carpeta del paquete
+    do file.copy("crudl/entry-point.dkl",path.concat(target,"entry-point.dkl"))
+    do file.wtext(path.concat(target,"entry-point.dkl"),replace_on_entrypoint(file.rtext(path.concat(target,"entry-point.dkl")),arg1))
 
     exception
     {
