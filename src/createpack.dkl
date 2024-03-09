@@ -1,0 +1,98 @@
+#include "dkli.dkh"
+#!
+program "createpack"
+{
+    #include "functions.dkh"
+    #include "serialize.dkh"
+
+    @templates_path="_templates/v12/"
+    @pack_template="pack"
+    @sites_path="./"
+
+    text @schema_ddm
+    {
+        $'
+#include "ddm.dkh"
+model "erp.cxc"
+{
+    #include "induxsoft.abstracts.ddm"
+
+
+}
+        '
+    }
+
+    copydir::source,dest
+    {
+        ref files=list.files(source,"*.*")
+        ref dirs=list.dirs(source)
+
+        do dir.ensure(dest)
+
+        for i=0;i<@count(files)
+        {
+            filedest=path.concat(dest, file.name(list.str(files,i)))
+            do file.copy(list.str(files,i),filedest)
+            do print(filedest)
+            exception
+            {
+                do print(last_error())
+            }
+        }
+        for i=0;i<@count(dirs)
+        {
+            dirdest=path.concat(dest, file.name(list.str(dirs,i)))
+            do copydir(list.str(dirs,i),dirdest)
+        }
+    }
+
+    print_error::err
+    {
+        do print("")
+        do print("-  ERROR -")
+        do print(err)
+        do print("------------------------------------------------------------")
+        do print("")
+        do print("- USO DE LA HERRAMIENTA -")
+        do print("./dkl createpack nombre_paquete")
+        do print("")
+        do print("Ejemplo:")
+        do print("\t./dkl createpack minuevopaquete")
+        do print("Donde:")
+        do print("\t minuevopaquete=Es el nombre del nuevo paquete de V12")
+        do print("------------------------------------------------------------")
+    }
+
+    arg1=""
+    
+    codeblock
+    {
+        ref args=list.create_from_fields( commandline(":") )
+        arg1=trim(list.str(args,1))
+        exception{}
+    }
+
+    if arg1=="" 
+    { 
+        do rise_error(0,"Faltan parámetros. Debe indicar el nombre del nuevo paquete")
+    }
+
+    source=path.concat(@templates_path,@pack_template)
+    target=path.concat(@sites_path,arg1)
+
+    if not(dir.exists(source))
+    {
+        do rise_error(0,"No existe la plantilla de paquete para V12")
+    }
+
+    do copydir(source,target)
+
+    //Crear el archivo ddm vacío
+    do file.wtext(path.concat(target,"_install/ddm/"+arg1+".ddm"),@schema_ddm)
+
+    exception
+    {
+        do print_error(last_error())
+    }
+    
+}
