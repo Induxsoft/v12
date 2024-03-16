@@ -1,11 +1,9 @@
-#include "functions.dkh"
-#include "serialize.dkh"
-#include "dbr.dkh"
 #include "dbm.dkl"
 #include "dbr.vars.dkl"
 #include "dbr.security.dkl"
 #include "dbr.apps.dkl"
 
+#!
 // PREPARACIÓN DE VARIABLES
 ref args = commandline("=")
 src = _get(@_run_settings,"$SourceCodeFile")
