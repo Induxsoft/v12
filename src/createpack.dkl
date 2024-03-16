@@ -96,6 +96,7 @@ model "erp.cxc"
     do copydir(source,target)
 
     //Crear el archivo ddm vacío
+    do dir.ensure(path.concat(target,"_install/ddm/"))
     do file.wtext(path.concat(target,"_install/ddm/"+arg1+".ddm"),@schema_ddm)
 
     //Copiar y reemplazar el nombre de la carpeta del paquete
