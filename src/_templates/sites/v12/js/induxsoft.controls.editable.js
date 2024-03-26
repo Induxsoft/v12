@@ -30,6 +30,7 @@ class EditTable extends HTMLElement
         document.addEventListener('DOMContentLoaded', () => 
         {
             this._shadow = this.attachShadow({ mode: 'closed' });
+            this._initOtherValues();
             
             this._shadow.innerHTML = `
                 <style>
@@ -131,6 +132,12 @@ class EditTable extends HTMLElement
                         cursor: col-resize;
                         background-color: transparent;
                     }
+                    th.ascendent::after{
+                        content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23BBB' class='bi bi-caret-down-fill' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+                    }
+                    th.descendent::after{
+                        content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23BBB' class='bi bi-caret-up-fill' viewBox='0 0 16 16'%3E%3Cpath d='m7.247 4.86-4.796 5.481c-.566.647-.106 1.659.753 1.659h9.592a1 1 0 0 0 .753-1.659l-4.796-5.48a1 1 0 0 0-1.506 0z'/%3E%3C/svg%3E");
+                    }
 
                     .tr-border-bottom td{ 
                         transition: border .1s; 
@@ -164,6 +171,7 @@ class EditTable extends HTMLElement
                     .collapse-btn { cursor: pointer; }
                     .cell-content { width: 100%; height: 100%; display: flex; align-items: center; overflow: hidden; }
                     .hidde-row{ display: none; }
+                    .hidde-col{ display: none !important; }
                     .container-cell-content { display: flex; gap:2px; width:-webkit-fill-available; height: 100%; align-items: center;}
 
                     .induxsoft-form-control{border: none; outline:1px solid #ced4da;display: block;width: 100%;padding: 0.375rem 0.75rem !important;font-size: 1rem;font-weight: 400;line-height: 1.5;color: #212529;background-color: #fff;background-clip: padding-box;appearance: none;transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
@@ -223,7 +231,6 @@ class EditTable extends HTMLElement
             this._resizableGrid(this._table);
             this._setSortEvent();
             this._setMoveEvent();
-            this._initOtherValues();
 
             // Si no se ha proporcionado el atributo data para el dataArray se genera a partir del contenido de la tabla
             if (this.DataArray.length < 1) this.UpdateData();
@@ -250,6 +257,7 @@ class EditTable extends HTMLElement
             thead.querySelectorAll('edit-tr').forEach(editTr => editTr.replaceWith(this._replaceTagNameElement(editTr, 'tr')));
             thead.querySelectorAll('tr').forEach(tr => {
                 tr.querySelectorAll('edit-th').forEach(editTh => {
+                    editTh.innerHTML = `<span>${editTh.textContent}</span>`;
                     this._setColumnWith(editTh);
                     editTh.replaceWith(this._replaceTagNameElement(editTh, 'th'));
                 });
@@ -426,7 +434,8 @@ class EditTable extends HTMLElement
         });
         document.addEventListener('mouseup', (e) => { 
             e.stopPropagation();
-            curCol,nxtCol = undefined;
+            curCol = undefined;
+            nxtCol = undefined;
             nxtCol = undefined;
             pageX = undefined;
             nxtColWidth = undefined;
@@ -447,6 +456,13 @@ class EditTable extends HTMLElement
         if (tbody) tbody.querySelectorAll('tr:not(.hidde-row)').forEach((_tr, i) => { if (_tr === tr) index = i });
         return index;
     }
+    _getVisibleColumnIndex=(td)=>
+    {
+        let index = -1;
+        let tr = td?.parentElement;
+        if (tr) tr.querySelectorAll('td:not(.hidde-col)').forEach((_td, i) => { if (_td === td) index = i });
+        return index;
+    }
     _getCurren=(setnew=false)=>
     {
         if (!this._current || setnew)
@@ -460,17 +476,21 @@ class EditTable extends HTMLElement
             let par = 0;
             field.onclick = e => {
                 e.stopPropagation();
+                fields.forEach(f=>{f.classList.remove('ascendent');f.classList.remove('descendent')});
                 par++;
+                let desc = (par%2==0);
+                field.classList.toggle('ascendent',desc);
+                field.classList.toggle('descendent',!desc);
                 if (this.ShowAsTree)
                 {
                     let options = this._getTreeOptions();
                     this.GetTree(options);
-                    this.SortTree(this.DataArray, (field.getAttribute('field')??''), (par%2==0), options);
+                    this.SortTree(this.DataArray, (field.getAttribute('field')??''), desc, options);
                     this.SetTree(this.DataArray, options);
                 }
                 else
                 {
-                    this.Sort(this.DataArray, (field.getAttribute('field')??''), (par%2==0));
+                    this.Sort(this.DataArray, (field.getAttribute('field')??''), desc);
                 }
                 this._printRows();
             };
@@ -1209,7 +1229,7 @@ class EditTable extends HTMLElement
      */
     NavToEnd=()=>
     {
-        this.NavTo(this.TRCount()-1,this.ColumnsCount()-1);
+        this.NavTo(this.TRCount()-1,(this._table.querySelectorAll('thead tr td:not(.hidde-col)').length-1));
     }
     /**
      * Mueve el selector a la primer columna de la fila especificada.
@@ -1225,7 +1245,7 @@ class EditTable extends HTMLElement
      */
     NavToLastCell=(row)=>
     {
-        this.NavTo(row,this.ColumnsCount()-1);
+        this.NavTo(row,(this._table.querySelectorAll('thead th:not(.hidde-col)').length-1));
     }
     /**
      * Mueve el selector a la columna y fila especificada.
@@ -1240,7 +1260,7 @@ class EditTable extends HTMLElement
         if (rows<1 || cols<1 || row>rows-1 || col>cols-1 || col<0 || row<0) return;
         
         let tbody=this.GetTBody();
-        let td = tbody.querySelectorAll(this.EdiTable.Const.HTML.TR)[row].querySelectorAll(this.EdiTable.Const.HTML.TD)[col];
+        let td = tbody.querySelectorAll(this.EdiTable.Const.HTML.TR)[row].querySelectorAll(this.EdiTable.Const.HTML.TD+':not(.hidde-col)')[col];
         this.CellFocus( td );
     }
     /**
@@ -1465,12 +1485,13 @@ class EditTable extends HTMLElement
             this._shadow.querySelectorAll(this.EdiTable.Const.HTML.TABLE+"#"+this.tableId+" "+this.EdiTable.Const.HTML.TD).forEach(td => {
                 td.removeEventListener('click', clickFunct);
                 td.addEventListener('click', clickFunct);
+                if (this.hideColumns.includes(td.cellIndex)) td.classList.add('hidde-col');
             });
 
             this._setMoveEvent();
 
             if (!nofocus)
-                this.CellFocus(nr.cells[0]);
+                this.CellFocus(nr.querySelector('td:not(.hidde-col)'));
             
             var eventArgs={
                 sender:this._getCurren(),
@@ -2055,7 +2076,7 @@ class EditTable extends HTMLElement
     NavLeft=(active_cell)=>
     {
         let active_cell_index=active_cell.cellIndex;
-        if (active_cell_index==0)
+        if (this._getVisibleColumnIndex(active_cell)==0)
         {
             if (!this.EverMove)
                 return;
@@ -2066,7 +2087,7 @@ class EditTable extends HTMLElement
         }
 
         let parent_tr = active_cell.parentElement;
-        let target_cell = parent_tr.querySelectorAll(this.EdiTable.Const.HTML.TD)[active_cell_index-1];
+        let target_cell = parent_tr.querySelectorAll(this.EdiTable.Const.HTML.TD+":not(.hidde-col)")[this._getVisibleColumnIndex(active_cell)-1];
         this.CellFocus(target_cell);
     }
     /**
@@ -2080,8 +2101,9 @@ class EditTable extends HTMLElement
         let active_cell_index=active_cell.cellIndex;
 
         let parent_tr = active_cell.parentElement;
-        
-        if (active_cell_index==parent_tr.querySelectorAll('td').length-1)
+        // console.log(active_cell_index);
+        // console.log(parent_tr.querySelectorAll(this.EdiTable.Const.HTML.TD+":not(.hidde-col)").length);
+        if (this._getVisibleColumnIndex(active_cell)==parent_tr.querySelectorAll(this.EdiTable.Const.HTML.TD+":not(.hidde-col)").length-1)
         {
             if (!this.EverMove)
                 return;
@@ -2091,7 +2113,7 @@ class EditTable extends HTMLElement
             return;
         }
 
-        let target_cell = parent_tr.querySelectorAll(this.EdiTable.Const.HTML.TD)[active_cell_index+1];
+        let target_cell = parent_tr.querySelectorAll(this.EdiTable.Const.HTML.TD+":not(.hidde-col)")[this._getVisibleColumnIndex(active_cell)+1];
         this.CellFocus(target_cell);
     }
     /**
@@ -2157,12 +2179,6 @@ class EditTable extends HTMLElement
 
         let cellContent = td.querySelector('div[iscellcontent=true]');
         if (!cellContent) cellContent = td.closest('div[iscellcontent=true]');
-
-        if (cellContent)
-        {
-            cellContent.style.justifyContent = (coldef?.textalign??'');
-            cellContent.style.textAlign = (coldef?.textalign??'');
-        }
         
         if (cellContent)
         {
@@ -2183,12 +2199,21 @@ class EditTable extends HTMLElement
     {
         if (cellContent)
         {
+            // Sizes
             cellContent.style.minHeight = this.minRowHeight;
             cellContent.style.maxHeight = this.maxRowHeight;
             cellContent.style.height = this.rowHeight;
             if (coldef?.minwidth) cellContent.style.minWidth = coldef.minwidth;
             if (coldef?.maxwidth) cellContent.style.maxWidth = coldef.maxwidth;
-            if (coldef?.width) cellContent.style.width = coldef.maxwidth;
+            if (coldef?.width) cellContent.style.width = coldef.width;
+            // Align
+            cellContent.style.justifyContent = (coldef?.textalign??'');
+            cellContent.style.textAlign = (coldef?.textalign??'');
+
+            if (this.maxRowHeight != 'none' || this.rowHeight != '100%')
+            {
+                cellContent.style.display = 'block';
+            }
         }
     }
     _withFormat(coldef, value)
@@ -2315,6 +2340,7 @@ class EditTable extends HTMLElement
                     
                     td.setAttribute('data-cell',(coldf?.title??''));
                     if (this.onTdPaint) this.onTdPaint(td, idx, this.ColIndexOfTd(td), (coldf?.field??''));
+                    if (this.hideColumns.includes(td.cellIndex)) td.classList.add('hidde-col');
                 });
 
                 if (this.ShowAsTree)
@@ -2725,6 +2751,30 @@ class EditTable extends HTMLElement
 
         this._getCurren().Events[this.EdiTable.Const.Events.OnSort](eventArgs);
     }
+    changeColumnTitle(field,title)
+    {
+        const th = this._table.querySelector(`thead > tr th[field="${field}"] span`);
+        if (!th) return false;
+
+        th.textContent = title;
+        return true;
+    }
+    hideColumn(fieldColumn,hide=true)
+    {
+        let th = this._table.querySelector(`thead th[field="${fieldColumn}"]`);
+        if (!th) return false;
+
+        this._table.querySelectorAll('tbody tr').forEach(tr => tr.cells[th.cellIndex].classList.toggle('hidde-col',hide));
+        th.classList.toggle('hidde-col', hide);
+
+        if (hide){
+            if (!this.hideColumns.includes(th.cellIndex)) this.hideColumns.push(th.cellIndex);
+        }
+        else this.hideColumns = this.hideColumns.filter(idx => idx != th.cellIndex);
+
+        return true;
+    }
+    hideColumns=[];
 }
 
 customElements.define('edit-table', EditTable);
