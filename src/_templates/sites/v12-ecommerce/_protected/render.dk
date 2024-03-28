@@ -3,75 +3,157 @@
 module ""
 {
     #include "functions.dkh"
+    #include "serialize.dkh"
 
     if not(contains(@@(@http_context,"$request/headers/http_accept"),"html")) { return }
+
+    get_site_config::
+    {
+        f = path.concat("_config",@@(@http_context,"$request/headers/HTTP_HOST")+".json")
+        if file.exists(f) 
+        {
+            return from.json(file.rtext(f))
+            exception{}
+        }
+        return record.create()
+    }
     
     print_navbar::
     {
-        template = ftext('
+        ref confg = get_site_config()
+        hide_banr = parse.bool(@@(confg,"#hide_main_ad_banner"))
+        hide_notf = parse.bool(@@(confg,"#hide_notif"))
+        hide_cart = parse.bool(@@(confg,"#hide_cart"))
+        hide_prch = parse.bool(@@(confg,"#hide_mypurchases"))
+        hide_favs = parse.bool(@@(confg,"#hide_myfavs"))
+        hide_adrs = parse.bool(@@(confg,"#hide_addrs"))
+        logo_sURL = @@(confg,"$logo")
+
+        // template = '
+        //     <nav class="navbar border-bottom sticky-top m-0 p-2">
+        //         <div class="row p-0 m-0 w-100">
+        //             <div class="col-4"><h5>Logotipo</h5></div>
+        //             <div class="col-4"><h5>Área de menú</h5></div>
+        //             <div class="col-4"><h5>Área de anuncios</h5></div>
+        //         <div>
+        //     </nav>
+        // '
+
+        template = '
             <nav class="navbar border-bottom sticky-top m-0 p-2">
                 <div class="row p-0 m-0 w-100">
-                    <div class="col-4"><h5>Logotipo</h5></div>
-                    <div class="col-4"><h5>Área de menú</h5></div>
-                    <div class="col-4"><h5>Área de anuncios</h5></div>
-                <div>
-            </nav>
-        ')
+                    
+                    <!-- =============== SECCIÓN 1 [Logo y dirección] =============== -->
 
-        return template
+                    <div class="col-4">
+                        <div>
+                            <!-- <h4 class="m-0">Logotipo</h4> -->
+                            <img src="#<logo_sURL>" style="max-width:6rem; max-height:4rem;" alt="LOGO">
+                        </div>
+                        <div class="d-flex align-items-center justify-content-center #<ifstr(hide_adrs,"d-none","")>">
+                            <div class="d-flex">
+                                <div>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-geo-alt" viewBox="0 0 16 16">
+                                        <path d="M12.166 8.94c-.524 1.062-1.234 2.12-1.96 3.07A32 32 0 0 1 8 14.58a32 32 0 0 1-2.206-2.57c-.726-.95-1.436-2.008-1.96-3.07C3.304 7.867 3 6.862 3 6a5 5 0 0 1 10 0c0 .862-.305 1.867-.834 2.94M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10"/>
+                                        <path d="M8 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4m0 1a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/>
+                                    </svg>
+                                </div>
+                                <div class="text-center">
+                                    <small>Enviar a</small>
+                                    <p class="m-0">CP 29039</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- =============== SECCIÓN 2 [Buscar y menú] =============== -->
+
+                    <div class="col-4">
+                        <div>
+                            <input type="search" class="form-control rounded-0 shadow-none" placeholder="Buscar">
+                        </div>
+                        <div>
+                            <h4 class="m-0">Área de menú</h4>
+                        </div>
+                    </div>
+
+                    <!-- =============== SECCIÓN 3 [Anuncios y carrito] =============== -->
+
+                    <div class="col-4">
+                        <div class="#<ifstr(hide_banr,"d-none","")>">
+                            <h4 class="m-0">Área de anuncios</h4>
+                        </div>
+                        <div class="d-flex gap-2 justify-content-end">
+                            <button class="btn btn-sm bg-transparent #<ifstr(hide_prch,"d-none","")>">Mis compras</button>
+                            <button class="btn btn-sm bg-transparent #<ifstr(hide_favs,"d-none","")>">Favoritos</button>
+                            <button class="btn btn-sm bg-transparent #<ifstr(hide_notf,"d-none","")>">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bell" viewBox="0 0 16 16">
+                                    <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2M8 1.918l-.797.161A4 4 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4 4 0 0 0-3.203-3.92zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5 5 0 0 1 13 6c0 .88.32 4.2 1.22 6"/>
+                                </svg>
+                            </button>
+                            <button class="btn btn-sm bg-transparent #<ifstr(hide_cart,"d-none","")>">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-cart2" viewBox="0 0 16 16">
+                                    <path d="M0 2.5A.5.5 0 0 1 .5 2H2a.5.5 0 0 1 .485.379L2.89 4H14.5a.5.5 0 0 1 .485.621l-1.5 6A.5.5 0 0 1 13 11H4a.5.5 0 0 1-.485-.379L1.61 3H.5a.5.5 0 0 1-.5-.5M3.14 5l1.25 5h8.22l1.25-5zM5 13a1 1 0 1 0 0 2 1 1 0 0 0 0-2m-2 1a2 2 0 1 1 4 0 2 2 0 0 1-4 0m9-1a1 1 0 1 0 0 2 1 1 0 0 0 0-2m-2 1a2 2 0 1 1 4 0 2 2 0 0 1-4 0"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+        '
+        return ftext(template)
     }
+    
     print_footer::
     {
-        template = ftext('
+        template = '
             <footer class="fixed-bottom text-center border-top p-1">
                 E-Commerce | Powered by Devkron
             </footer>
-        ')
-
-        return template
+        '
+        return ftext(template)
     }
 
-    template='
-    <!DOCTYPE html>
-    <html>
-        <head>
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <meta charset = "utf-8" />
-            
-            <!-- HTML Meta Tags -->
-            <title>#<@@(@http_context,"$session/resource/properties/web_meta_tags/title")></title>
-            <meta name="description" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/description")>">
+    template = '
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <meta charset = "utf-8" />
+                
+                <!-- HTML Meta Tags -->
+                <title>#<@@(@http_context,"$session/resource/properties/web_meta_tags/title")></title>
+                <meta name="description" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/description")>">
 
-            <!-- Facebook Meta Tags -->
-            <meta property="og:url" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/og/url")>">
-            <meta property="og:type" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/og/type")>">
-            <meta property="og:title" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/og/title")>">
-            <meta property="og:description" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/og/description")>">
-            <meta property="og:image" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/og/image")>">
+                <!-- Facebook Meta Tags -->
+                <meta property="og:url" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/og/url")>">
+                <meta property="og:type" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/og/type")>">
+                <meta property="og:title" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/og/title")>">
+                <meta property="og:description" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/og/description")>">
+                <meta property="og:image" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/og/image")>">
 
-            <!-- Twitter Meta Tags -->
-            <meta name="twitter:card" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/twitter/card")>">
-            <meta property="twitter:domain" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/twitter/domain")>">
+                <!-- Twitter Meta Tags -->
+                <meta name="twitter:card" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/twitter/card")>">
+                <meta property="twitter:domain" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/twitter/domain")>">
 
-            <meta property="twitter:url" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/twitter/url")>">
-            <meta name="twitter:title" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/twitter/title")>">
-            <meta name="twitter:description" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/twitter/description")>">
-            <meta name="twitter:image" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/twitter/image")>">
+                <meta property="twitter:url" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/twitter/url")>">
+                <meta name="twitter:title" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/twitter/title")>">
+                <meta name="twitter:description" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/twitter/description")>">
+                <meta name="twitter:image" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/twitter/image")>">
 
-            <!-- Bootstrap CSS -->
-            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
-            
-            <!-- Bootstrap & POPPER JS -->
-            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-gtEjrD/SeCtmISkJkNUaaKMoLD0//ElJ19smozuHV6z3Iehds+3Ulb9Bn9Plx0x4" crossorigin="anonymous"></script>
-        </head>
-        <body>
-            #<print_navbar()>
-            #<@content>
-            #<print_footer()>
-        </body>
-    </html>'
-
-    if not(isset("@title")) { @title = "ecommerce" }
+                <!-- Bootstrap CSS -->
+                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
+                
+                <!-- Bootstrap & POPPER JS -->
+                <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-gtEjrD/SeCtmISkJkNUaaKMoLD0//ElJ19smozuHV6z3Iehds+3Ulb9Bn9Plx0x4" crossorigin="anonymous"></script>
+            </head>
+            <body>
+                #<print_navbar()>
+                #<@content>
+                #<print_footer()>
+            </body>
+        </html>
+    '
     
     @content = @@(@http_context,"response/text")
     @http_context<"response/text"> : ftext(template)
