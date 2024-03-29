@@ -1,0 +1,61 @@
+#include "dkli.dkh"
+#!
+module ":12.com"
+{
+    module ":v12.channel"
+    {
+        function set(&db,&channel)
+        {
+            if isnull(v12.channel.get(db,@@(channel,"name")))
+            {
+                new prm
+                {
+                    @"sys_pk": 0
+                    @"sys_guid": uuid()
+                    @"sys_timestamp*": dbr.sql("NOW()")
+                    @"prov": @@(channel,"#prov")
+                    @"name": @@(channel,"$name")
+                    @"config": @@(channel,"$config")
+                }
+                do dbr.insert(db, "snd_channel", prm)
+                return @true
+            }
+            return @false
+        }
+        function get(&db,name)
+        {
+            new prm { @"name": name }
+            return dbr.rec(db,"SELECT * FROM snd_channel WHERE name = @name", prm)
+        }
+    }
+
+    module ":v12.channel.config"
+    {
+        function set(&db,&config,channel)
+        {
+            config_text = ""
+            if not(isnull(config)){ config_text = to.json(config) }
+
+            new prm
+            {
+                @"channel": channel
+                @"config": config_text
+            }
+
+            do dbr.update(db,"snd_channel",prm,"name=@channel",prm)
+        }
+        function get(&db,channel)
+        {
+            new prm { @"channel": channel }
+            config_text = dbr.str(db,"SELECT IFNULL(config,'') FROM snd_channel WHERE name=channel", prm)
+            if config_text == "" { return @null }
+            
+            return from.json(config_text)
+        }
+    }
+
+    function sendMessage(&db,&message)
+    {
+        do print('asd')
+    }
+}
