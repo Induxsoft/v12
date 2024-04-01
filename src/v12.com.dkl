@@ -1,7 +1,9 @@
 #include "dkli.dkh"
 #!
-module ":12.com"
+module ":v12.com"
 {
+    #include "dbr.vars.dkl"
+
     module ":v12.channel"
     {
         function set(&db,&channel)
@@ -12,6 +14,7 @@ module ":12.com"
                 {
                     @"sys_pk": 0
                     @"sys_guid": uuid()
+                    @"sys_recver": 0
                     @"sys_timestamp*": dbr.sql("NOW()")
                     @"prov": @@(channel,"#prov")
                     @"name": @@(channel,"$name")
@@ -25,7 +28,12 @@ module ":12.com"
         function get(&db,name)
         {
             new prm { @"name": name }
-            return dbr.rec(db,"SELECT * FROM snd_channel WHERE name = @name", prm)
+            return dbr.rec(db,"SELECT * FROM snd_channel WHERE name = @name LIMIT 1;", prm)
+        }
+        function get_prov(&db,channel_name)
+        {
+            new prm { @"name": channel_name }
+            return dbr.rec(db,"SELECT p.* FROM snd_provider p INNER JOIN snd_channel c ON c.prov=p.sys_pk WHERE c.name = @name LIMIT 1;", prm)
         }
     }
 
@@ -38,16 +46,16 @@ module ":12.com"
 
             new prm
             {
-                @"channel": channel
+                @"name": channel
                 @"config": config_text
             }
 
-            do dbr.update(db,"snd_channel",prm,"name=@channel",prm)
+            do dbr.update(db,"snd_channel",prm,"name=@name",prm)
         }
         function get(&db,channel)
         {
             new prm { @"channel": channel }
-            config_text = dbr.str(db,"SELECT IFNULL(config,'') FROM snd_channel WHERE name=channel", prm)
+            config_text = dbr.str(db,"SELECT IFNULL(config,'') FROM snd_channel WHERE name=@channel LIMIT 1;", prm)
             if config_text == "" { return @null }
             
             return from.json(config_text)
@@ -56,6 +64,39 @@ module ":12.com"
 
     function sendMessage(&db,&message)
     {
-        do print('asd')
+        // message:
+        // {
+        //     "channel":"Nombre del canal de envío",
+        //     "to":"Dirección del destinatario",
+        //     "cc":"Dirección de copia",
+        //     "cco": "Dirección de copia oculta",
+        //     "reply": "Dirección de respuesta",
+        //     "subject":"Asunto del mensaje",
+        //     "message":"Cuerpo del mensaje (html o texto)",
+        //     "text_message":"Versión de solo texto del mensaje",
+        //     "template":"Nombre de una plantilla usada para el mensaje"
+        // }
+
+        if trim(@@(message,"$channel")) == "" { do rise_error(0, "Debe indicar un nombre de canal") }
+
+        ref config = v12.channel.config.get(db,@@(message,"$channel"))
+        tmpltename = @@(message,"$template")
+        tmpltediry = dbr.vars.getd(db, "dbext_comm_msg_templates", "_templates/messages/")
+        tmpltepath = path.concat(tmpltediry, tmpltename)
+
+        if trim(tmpltename) != "" && file.exists(tmpltepath)
+        {
+            message<"message">: file.rtext(tmpltepath)
+        }
+
+        ref channel = v12.channel.get(db,@@(message,"$channel"))
+        ref provcnl = v12.channel.get_prov(db,@@(message,"$channel"))
+
+        if isnull(channel) { do rise_error(0,"No existe un canal con el nombre indicado") }
+        if @@(provcnl,"$lib") == "" { do rise_error(0,"No se ha registrado la ruta del archivo en el campo 'lib' del proveedor") }
+        if not(file.exists(@@(provcnl,"$lib"))) { do rise_error(0,"El archivo registrado en lib no existe") }
+
+        include @@(provcnl,"$lib")
+        return sendMessage(config, message)
     }
 }
