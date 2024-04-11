@@ -37,6 +37,7 @@ mkdir %1
 "C:\Program Files\7-Zip\7z.exe" a -r %1\alibeb.zip ..\alibeb\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\userext.zip ..\userext\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\orgcat.zip ..\orgcat\src\*
+"C:\Program Files\7-Zip\7z.exe" a -r %1\cmpreq.zip ..\cmpreq\src\*
 GOTO EOF
 
 :ERROR1
