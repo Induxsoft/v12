@@ -149,7 +149,7 @@ module
         ref actlst = uie.deleteItems(actlst, main_list)
         ref replst = uie.deleteItems(replst, main_list)
 
-        #$ div(class="container-section m-0 my-2 p-2 border-bottom")
+        #$ div(class="container-section m-0 my-2 p-2 border-bottom no-print")
         {
             #! do uie.setV12FormBarStyle()
             // #$ div(class="d-flex align-items-center p-0")
