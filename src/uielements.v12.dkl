@@ -120,6 +120,7 @@ module
         ref actlst = ifnull(@@(config, "&actions"), list.create())
         ref replst = ifnull(@@(config, "&reports"), list.create())
         ref m_acts = @@(config, "&buttons")
+        ref tmpact = from.json(to.json(actlst))
         title_view = field.dstr(config, "title", "")
         urlexitbtn = field.dstr(config, "urlexit", "/")
         main_list = field.dstr(config, "main", "")
@@ -180,7 +181,7 @@ module
                             {
                                 ref btn = list.obj(main_buttons, i)
                                 if @@(btn,"$shorttitle")=="" { btn<"shorttitle">:cut(@@(btn,"$title"),25)}
-                                #$ li{ a(class="#<btn_cls> list-action" title="#<@@(btn,'$title')>" href="#<@@(btn,'$href')>"){$"#<@@(btn,'$shorttitle')>"} }
+                                #$ li{ a(class="#<btn_cls> list-action" title="#<@@(btn,'$title')>" href="#" onclick="v12navbar.clickMainAction('#<@@(btn,'$id')>','#<@@(btn,'$href')>')"){$"#<@@(btn,'$shorttitle')>"} }
                             }
 
                             div(class="d-flex gap-1")
@@ -213,6 +214,7 @@ module
             script{$'
                 var v12navbar =
                 {
+                    mainActions : #<to.json(tmpact)>,
                     init()
                     {
                         const btn_actions = document.querySelectorAll(".list-action");
@@ -223,6 +225,16 @@ module
                             });
                             if (list) list.change_event = (data) => { v12navbar.selectAction(data); }
                         });
+                    },
+                    clickMainAction(id,def_href)
+                    {
+                        let mainAction = this.mainActions.find(m => m.id == id);
+                        if (!mainAction) {
+                            window.location.href = def_href;
+                        }
+                        else {
+                            this.selectAction(mainAction);
+                        }
                     },
                     selectAction(data)
                     {
