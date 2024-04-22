@@ -17,40 +17,82 @@ module ""
         }
         return record.create()
     }
+
+    ref confg = get_site_config()
+    @hide_banr = parse.bool(@@(confg,"#hide_main_ad_banner"))
+    @hide_notf = parse.bool(@@(confg,"#hide_notif"))
+    @hide_cart = parse.bool(@@(confg,"#hide_cart"))
+    @hide_prch = parse.bool(@@(confg,"#hide_mypurchases"))
+    @hide_favs = parse.bool(@@(confg,"#hide_myfavs"))
+    @hide_adrs = parse.bool(@@(confg,"#hide_addrs"))
+    @imag_banr = @@(confg,"$banner_add_img")
+    @link_banr = @@(confg,"$banner_add_link")
+    @logo_sURL = field.dstr(confg,"logo","https://plazamundial.net/_img/plazamundial-v2c.png")
+    @logo_link = field.dstr(confg,"logo_link","/")
+    @back_colr = field.dstr(confg,"nav_and_footer_backcolor","#099803")
+    @text_colr = field.dstr(confg,"nav_and_footer_textcolor","#FFF")
+    @hide_srch = parse.bool(@@(confg,"#hide_search"))
+
+    print_session_button::
+    {
+        btn = ''
+        if @@(@http_context, "session/user/ids") != ""
+        {
+            btn = ftext('
+                <div class="dropdown">
+                    <button  class="btn btn-sm bg-transparent dropdown-toggle" id="profile_dropdown" data-bs-toggle="dropdown">
+                        #<@@(@http_context,"session/user/name")>
+                    </button >
+                    <ul class="dropdown-menu" aria-labelledby="profile_dropdown">
+                        <li><a class="dropdown-item" href="/-/me/">Mi perfil</a></li>
+                        <li><a class="dropdown-item" href="/-/logout/">Salir</a></li>
+                    </ul>
+                </div>
+            ')
+        }
+        else 
+        {
+            currenturl = current_url(@true)
+            currenturl = currenturl + ifstr(contains(currenturl,"?"), "&", "?") + "ids=@ids"
+            btn = ftext('<a href="/-/login/?exit_url_encode=#<url_encode(currenturl)>" class="btn btn-sm bg-transparent">Iniciar sesión</a>')
+        }
+        return btn
+    }
+
+    current_url::include_params
+    {
+        http = ifstr(parse.bool(@@(@http_context,"request/headers/HTTPS")),"https","http")
+        host = @@(@http_context, "request/headers/HTTP_HOST")
+        port = @@(@http_context, "request/headers/SERVER_PORT")
+        ruri = @@(@http_context, "request/headers/REQUEST_URI")
+        prms = @@(@http_context, "request/headers/QUERY_STRING")
+
+        base = http+"://"+host+":"+port
+        _url = path.concat(base, ruri)
+
+        if include_params && trim(prms) != "" { _url = path.concat(_url,"?"+prms)  }
+
+        return _url
+    }
     
     print_navbar::
     {
-        ref confg = get_site_config()
-        hide_banr = parse.bool(@@(confg,"#hide_main_ad_banner"))
-        hide_notf = parse.bool(@@(confg,"#hide_notif"))
-        hide_cart = parse.bool(@@(confg,"#hide_cart"))
-        hide_prch = parse.bool(@@(confg,"#hide_mypurchases"))
-        hide_favs = parse.bool(@@(confg,"#hide_myfavs"))
-        hide_adrs = parse.bool(@@(confg,"#hide_addrs"))
-        logo_sURL = @@(confg,"$logo")
-
-        // template = '
-        //     <nav class="navbar border-bottom sticky-top m-0 p-2">
-        //         <div class="row p-0 m-0 w-100">
-        //             <div class="col-4"><h5>Logotipo</h5></div>
-        //             <div class="col-4"><h5>Área de menú</h5></div>
-        //             <div class="col-4"><h5>Área de anuncios</h5></div>
-        //         <div>
-        //     </nav>
-        // '
-
         template = '
-            <nav class="navbar border-bottom sticky-top m-0 p-2">
+            <style>
+                .btn{ color: inherit !important; }
+            </style>
+            <nav class="navbar border-bottom sticky-top m-0 p-2" style="background-color: #<@back_colr>; color: #<@text_colr>;">
                 <div class="row p-0 m-0 w-100">
                     
                     <!-- =============== SECCIÓN 1 [Logo y dirección] =============== -->
 
                     <div class="col-4">
                         <div>
-                            <!-- <h4 class="m-0">Logotipo</h4> -->
-                            <img src="#<logo_sURL>" style="max-width:6rem; max-height:4rem;" alt="LOGO">
+                            <a href="#<@logo_link>">
+                                <img src="#<@logo_sURL>" style="height:40px;width:auto;" class="#<ifstr(trim(@logo_sURL)=="","d-none","")>">
+                            </a>
                         </div>
-                        <div class="d-flex align-items-center justify-content-center #<ifstr(hide_adrs,"d-none","")>">
+                        <div class="d-flex align-items-center justify-content-center #<ifstr(@hide_adrs,"d-none","")>">
                             <div class="d-flex">
                                 <div>
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-geo-alt" viewBox="0 0 16 16">
@@ -70,28 +112,29 @@ module ""
 
                     <div class="col-4">
                         <div>
-                            <input type="search" class="form-control rounded-0 shadow-none" placeholder="Buscar">
+                            <input type="search" class="form-control rounded-0 shadow-none #<ifstr(@hide_srch,"d-none","")>" placeholder="Buscar">
                         </div>
                         <div>
-                            <h4 class="m-0">Área de menú</h4>
+                            <!-- <h4 class="m-0">Área de menú</h4> -->
                         </div>
                     </div>
 
                     <!-- =============== SECCIÓN 3 [Anuncios y carrito] =============== -->
 
                     <div class="col-4">
-                        <div class="#<ifstr(hide_banr,"d-none","")>">
-                            <h4 class="m-0">Área de anuncios</h4>
+                        <div class="#<ifstr(@hide_banr,"d-none","")>">
+                            <a href="#<@link_banr>"><img src="#<@imag_banr>" alt="BANNER" style="height:50px;width:auto;"></a>
                         </div>
-                        <div class="d-flex gap-2 justify-content-end">
-                            <button class="btn btn-sm bg-transparent #<ifstr(hide_prch,"d-none","")>">Mis compras</button>
-                            <button class="btn btn-sm bg-transparent #<ifstr(hide_favs,"d-none","")>">Favoritos</button>
-                            <button class="btn btn-sm bg-transparent #<ifstr(hide_notf,"d-none","")>">
+                        <div class="d-flex gap-2 justify-content-end mt-1">
+                            #<print_session_button()>
+                            <button class="btn btn-sm bg-transparent #<ifstr(@hide_prch,"d-none","")>">Mis compras</button>
+                            <button class="btn btn-sm bg-transparent #<ifstr(@hide_favs,"d-none","")>">Favoritos</button>
+                            <button class="btn btn-sm bg-transparent #<ifstr(@hide_notf,"d-none","")>">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bell" viewBox="0 0 16 16">
                                     <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2M8 1.918l-.797.161A4 4 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4 4 0 0 0-3.203-3.92zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5 5 0 0 1 13 6c0 .88.32 4.2 1.22 6"/>
                                 </svg>
                             </button>
-                            <button class="btn btn-sm bg-transparent #<ifstr(hide_cart,"d-none","")>">
+                            <button class="btn btn-sm bg-transparent #<ifstr(@hide_cart,"d-none","")>">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-cart2" viewBox="0 0 16 16">
                                     <path d="M0 2.5A.5.5 0 0 1 .5 2H2a.5.5 0 0 1 .485.379L2.89 4H14.5a.5.5 0 0 1 .485.621l-1.5 6A.5.5 0 0 1 13 11H4a.5.5 0 0 1-.485-.379L1.61 3H.5a.5.5 0 0 1-.5-.5M3.14 5l1.25 5h8.22l1.25-5zM5 13a1 1 0 1 0 0 2 1 1 0 0 0 0-2m-2 1a2 2 0 1 1 4 0 2 2 0 0 1-4 0m9-1a1 1 0 1 0 0 2 1 1 0 0 0 0-2m-2 1a2 2 0 1 1 4 0 2 2 0 0 1-4 0"/>
                                 </svg>
@@ -107,7 +150,7 @@ module ""
     print_footer::
     {
         template = '
-            <footer class="fixed-bottom text-center border-top p-1">
+            <footer class="fixed-bottom text-center border-top p-1" style="background-color: #<@back_colr>; color: #<@text_colr>;">
                 E-Commerce | Powered by Devkron
             </footer>
         '

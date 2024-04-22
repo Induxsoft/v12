@@ -1,2 +1,4 @@
-GET: /-/{_page_template}/{_main_arg}/{_sec_arg?} > $ecommerce/entry-point.dkl
-GET: /-/{_page_template}/{_main_arg?} > $ecommerce/entry-point.dkl
+*: /-/{_page_template}/{_main_arg}/{_sec_arg?} > $ecommerce/entry-point.dkl
+*: /-/{_page_template}/{_main_arg?} > $ecommerce/entry-point.dkl
+*: /-/ > $ecommerce/entry-point.dkl
+*: / > $ecommerce/entry-point.dkl
