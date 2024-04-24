@@ -61,25 +61,25 @@ module ":v12.com"
             return from.json(config_text)
         }
     }
-
+    // message:
+    // {
+    //     "channel":"Nombre del canal de envío",
+    //     "to":"Dirección del destinatario",
+    //     "cc":"Dirección de copia",
+    //     "cco": "Dirección de copia oculta",
+    //     "reply": "Dirección de respuesta",
+    //     "subject":"Asunto del mensaje",
+    //     "message":"Cuerpo del mensaje (html o texto)",
+    //     "text_message":"Versión de solo texto del mensaje",
+    //     "template":"Nombre de una plantilla usada para el mensaje"
+    // }
+    // replace
+    // {
+    //     "key": "Valor de la clave a reemplazar en el mensaje"
+    // }
     function sendMessage(&db,&message,&replace)
     {
-        // message:
-        // {
-        //     "channel":"Nombre del canal de envío",
-        //     "to":"Dirección del destinatario",
-        //     "cc":"Dirección de copia",
-        //     "cco": "Dirección de copia oculta",
-        //     "reply": "Dirección de respuesta",
-        //     "subject":"Asunto del mensaje",
-        //     "message":"Cuerpo del mensaje (html o texto)",
-        //     "text_message":"Versión de solo texto del mensaje",
-        //     "template":"Nombre de una plantilla usada para el mensaje"
-        // }
-        // replace
-        // {
-        //     "key": "Valor de la clave a reemplazar en el mensaje"
-        // }
+        namespace "v12.com"
 
         if trim(@@(message,"$channel")) == "" { do rise_error(0, "Debe indicar un nombre de canal") }
         if isnull(replace) { ref replace = record.create() }
