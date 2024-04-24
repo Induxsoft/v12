@@ -62,7 +62,7 @@ module ":v12.com"
         }
     }
 
-    function sendMessage(&db,&message)
+    function sendMessage(&db,&message,&replace)
     {
         // message:
         // {
@@ -76,8 +76,13 @@ module ":v12.com"
         //     "text_message":"Versión de solo texto del mensaje",
         //     "template":"Nombre de una plantilla usada para el mensaje"
         // }
+        // replace
+        // {
+        //     "key": "Valor de la clave a reemplazar en el mensaje"
+        // }
 
         if trim(@@(message,"$channel")) == "" { do rise_error(0, "Debe indicar un nombre de canal") }
+        if isnull(replace) { ref replace = record.create() }
 
         ref config = v12.channel.config.get(db,@@(message,"$channel"))
         tmpltename = @@(message,"$template")
@@ -97,6 +102,6 @@ module ":v12.com"
         if not(file.exists(@@(provcnl,"$lib"))) { do rise_error(0,"El archivo registrado en lib no existe") }
 
         include @@(provcnl,"$lib")
-        return sendMessage(config, message)
+        return sendMessage(config, message, replace)
     }
 }
