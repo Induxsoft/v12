@@ -1,6 +1,7 @@
 #include "dbm.dkl"
 #include "dbr.vars.dkl"
 #include "dbr.security.dkl"
+#include "dbr.events.dkl"
 #include "dbr.apps.dkl"
 
 #!
@@ -23,6 +24,7 @@ shortcuts_file = path.concat(path_app_info,"sys_app_shortcut.csv")
 item_type_file = path.concat(path_app_info,"sys_app_item_type.csv")
 item_action_file = path.concat(path_app_info,"sys_app_item_action.csv")
 vars_file = path.concat(path_app_info,"vars.json")
+events_file = path.concat(path_app_info,"sys_event_handlers.csv")
 // Archivo de permisos
 sitem_file = path.concat(path_initial_data,"sitem.csv")
 
@@ -145,6 +147,23 @@ if file.exists(vars_file)
         for j = 0; j < list.count(vars) {
             do dbr.vars.define(database, list.obj(vars,j), @@(cat,"$id"))
         }
+    }
+}
+
+if file.exists(events_file)
+{
+    do print("\nREGISTRANDO EVENTOS")
+
+    ref events = CsvRead(events_file,"")
+    for i = 0; i < list.count(events)
+    {
+        ref ev = list.obj(events,i)
+
+        sender_id = @@(ev,"$sender_id")
+        event_handler = @@(ev,"$event_handler")
+
+        do dbr.events.register(database,sender_id,event_handler)
+        do print(ftext("- #<sender_id>"))
     }
 }
 
