@@ -1,0 +1,26 @@
+<html>
+	<head>
+		<title>Solicitud de cambio de contraseña</title>
+	</head>
+	<body style="background: #ffffff;">
+		
+		<div style="width:100%;background: #ffffff; padding: 10px;">
+			<table width="100%">
+				<tbody>
+					<tr>	
+						<th>
+							<h3 style="margin-top:10px;margin-bottom: 10px;">Cambio de contraseña</h3>
+						</th>
+					</tr>
+				</tbody>		
+			</table>
+
+			<hr style=" margin-top: 5px; margin-bottom: 5px;border: 0; border-top: 1px solid rgba(31, 27, 27, 0.15);">
+	
+			<h4>Hemos recibido una solicitud de recuperación de contraseña, por favor haz clic en el siguiente vínculo (o copia y pega la url en tu navegador) para completar el proceso </h4>
+			<h4 style="font-size:16.5px"><a href="@url" style="text-decoration: none;">@url</a></h4>
+			<h3>Si tú no has solicitado este cambio, por favor ignora este mensaje.</h3>
+			
+		</div>
+	</body>
+</html>
