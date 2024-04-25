@@ -101,7 +101,13 @@ module ":v12.com"
         if @@(provcnl,"$lib") == "" { do rise_error(0,"No se ha registrado la ruta del archivo en el campo 'lib' del proveedor") }
         if not(file.exists(@@(provcnl,"$lib"))) { do rise_error(0,"El archivo registrado en lib no existe") }
 
-        include @@(provcnl,"$lib")
-        return sendMessage(config, message, replace)
+        new com_context
+        {
+            @"config*": config
+            @"message*": message
+            @"replace*": replace
+        }
+
+        do runscript(@@(provcnl,"$lib"), "com_context", com_context)
     }
 }
