@@ -1,1 +1,1 @@
-GET:/$/* > $/ecommerce/_static/*
+GET:/$/* > $ecommerce/_static/*
