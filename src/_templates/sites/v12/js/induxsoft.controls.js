@@ -550,8 +550,13 @@ class InputKey extends HTMLElement
             if (this.hasAttribute('data-value'))
             {
                 try{
-                    let initvalue = this.setObjectMinus(JSON.parse(this.getAttribute('data-value')??'{}'));
-                    this.setValue(initvalue);
+                    var data_value=JSON.parse(this.getAttribute('data-value')??'{}');
+                    if(data_value)
+                    {
+                        let initvalue = this.setObjectMinus(data_value);
+                        this.setValue(initvalue);
+                    }
+                    
                 }catch{
                     alert('El valor del atributo "data-value" tiene un formato JSON inválido');
                 }
@@ -733,7 +738,7 @@ class InputKey extends HTMLElement
     {
         if (this.data && this.data.length > 0)
         {
-            this.record_selected = this.data.find(d => (d[(this.getAttribute('data-search')??'').toLowerCase()]??'').toLowerCase() == id.toLowerCase());
+            this.record_selected = this.data.find(d => (d[(this.getAttribute('data-search')??'').toString().toLowerCase()]??'').toString().toLowerCase() == id.toLowerCase());
         }
         return this.record_selected;
     }
