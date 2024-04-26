@@ -167,6 +167,7 @@ module ""
             .title_forms { color: #<primary_text_color> !important; }
             .links_forms { color: #<primary_text_color> !important; text-decoration: none; }
             .button_forms { color: #<content_text_color> !important; background-color: #<content_back_color> !important; }
+            .box_shadow { box-shadow: 6px 6px 12px 0 #DDD !important; }
         </style>
     ')
 
