@@ -1,6 +1,6 @@
 @echo ACTUALIZAR  
 IF "%~1"=="" GOTO ERROR1
-
+git -C "..\webcomponents" pull https://%1@github.com/Induxsoft/webcomponents.git
 git -C "..\cxc" pull https://%1@github.com/Induxsoft/cxc.git
 git -C "..\cxp" pull https://%1@github.com/Induxsoft/cxp.git
 git -C "..\compras" pull https://%1@github.com/Induxsoft/compras.git
@@ -34,7 +34,7 @@ git -C "..\alibeb" pull https://%1@github.com/Induxsoft/alibeb.git
 git -C "..\userext" pull https://%1@github.com/Induxsoft/userext.git
 git -C "..\orgcat" pull https://%1@github.com/Induxsoft/orgcat.git
 git -C "..\cmpreq" pull https://%1@github.com/Induxsoft/cmpreq.git
-
+git -C "..\rhgfcdi" pull https://%1@github.com/Induxsoft/rhgfcdi.git
 GOTO EOF
 
 :ERROR1
