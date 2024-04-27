@@ -44,8 +44,32 @@ module ""
                         #<@@(@http_context,"session/user/name")>
                     </button >
                     <ul class="dropdown-menu" aria-labelledby="profile_dropdown">
-                        <li><a class="dropdown-item" href="/-/me/">Mi perfil</a></li>
-                        <li><a class="dropdown-item" href="/-/logout/">Salir</a></li>
+                        <li>
+                            <a class="dropdown-item d-flex gap-2 align-items-center" href="/-/me/">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#888" class="bi bi-person-fill" viewBox="0 0 16 16">
+                                    <path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/>
+                                </svg>
+                                Mi perfil
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item d-flex gap-2 align-items-center" href="/-/address/">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#888" class="bi bi-geo-alt-fill" viewBox="0 0 16 16">
+                                    <path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10m0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6"/>
+                                </svg>
+                                Mis direcciones de envío
+                            </a>
+                        </li>
+                        <div class="p-2 mb-2 border-bottom"></div>
+                        <li>
+                            <a class="dropdown-item d-flex gap-2 align-items-center" href="/-/logout/">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#888" class="bi bi-box-arrow-left" viewBox="0 0 16 16">
+                                    <path fill-rule="evenodd" d="M6 12.5a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 0-.5-.5h-8a.5.5 0 0 0-.5.5v2a.5.5 0 0 1-1 0v-2A1.5 1.5 0 0 1 6.5 2h8A1.5 1.5 0 0 1 16 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 5 12.5v-2a.5.5 0 0 1 1 0z"/>
+                                    <path fill-rule="evenodd" d="M.146 8.354a.5.5 0 0 1 0-.708l3-3a.5.5 0 1 1 .708.708L1.707 7.5H10.5a.5.5 0 0 1 0 1H1.707l2.147 2.146a.5.5 0 0 1-.708.708z"/>
+                                </svg>
+                                Salir
+                            </a>
+                        </li>
                     </ul>
                 </div>
             ')
@@ -163,10 +187,15 @@ module ""
 
     @main_styles = ftext('
         <style>
+            :root{
+                --primary-color: #<primary_text_color>;
+                --content-back-color: #<content_back_color>;
+                --content-text-color: #<content_text_color>;
+            }
             body{ background-color: #F5F5F5; }
-            .title_forms { color: #<primary_text_color> !important; }
-            .links_forms { color: #<primary_text_color> !important; text-decoration: none; }
-            .button_forms { color: #<content_text_color> !important; background-color: #<content_back_color> !important; }
+            .title_forms { color: var(--primary-color) !important; }
+            .links_forms { color: var(--primary-color) !important; text-decoration: none; }
+            .button_forms { color: var(--content-text-color) !important; background-color: var(--content-back-color) !important; }
             .box_shadow { box-shadow: 6px 6px 12px 0 #DDD !important; }
         </style>
     ')
