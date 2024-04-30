@@ -181,9 +181,16 @@ module ""
         return ftext(template)
     }
 
-    primary_text_color = ifstr(tolower(@back_colr) != "#fff" && tolower(@back_colr) != "white", @back_colr, "#000")
+    primary_text_color = @back_colr
     content_text_color = @text_colr
     content_back_color = @back_colr
+
+    if tolower(@back_colr) == "#fff" || tolower(@back_colr) == "white"
+    {
+        primary_text_color = "#000"
+        content_text_color = "#FFF"
+        content_back_color = "#000"
+    }
 
     @main_styles = ftext('
         <style>
