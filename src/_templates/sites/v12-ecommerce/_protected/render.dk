@@ -110,7 +110,7 @@ module ""
                     
                     <!-- =============== SECCIÓN 1 [Logo y dirección] =============== -->
 
-                    <div class="col-4">
+                    <div class="col-sm-4">
                         <div>
                             <a href="#<@logo_link>">
                                 <img src="#<@logo_sURL>" style="height:40px;width:auto;" class="#<ifstr(trim(@logo_sURL)=="","d-none","")>">
@@ -134,7 +134,7 @@ module ""
 
                     <!-- =============== SECCIÓN 2 [Buscar y menú] =============== -->
 
-                    <div class="col-4">
+                    <div class="col-sm-4">
                         <div>
                             <input type="search" class="form-control rounded-0 shadow-none #<ifstr(@hide_srch,"d-none","")>" placeholder="Buscar">
                         </div>
@@ -145,7 +145,7 @@ module ""
 
                     <!-- =============== SECCIÓN 3 [Anuncios y carrito] =============== -->
 
-                    <div class="col-4">
+                    <div class="col-sm-4">
                         <div class="#<ifstr(@hide_banr,"d-none","")>">
                             <a href="#<@link_banr>"><img src="#<@imag_banr>" alt="BANNER" style="height:50px;width:auto;"></a>
                         </div>
