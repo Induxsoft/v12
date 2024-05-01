@@ -39,6 +39,7 @@ mkdir %1
 "C:\Program Files\7-Zip\7z.exe" a -r %1\orgcat.zip ..\orgcat\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\cmpreq.zip ..\cmpreq\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\rhgfcdi.zip ..\rhgfcdi\src\*
+"C:\Program Files\7-Zip\7z.exe" a -r %1\lgcli.zip ..\lgcli\src\*
 GOTO EOF
 
 :ERROR1

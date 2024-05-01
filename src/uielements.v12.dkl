@@ -32,11 +32,40 @@ module
                         {
                             #! 
                             ref cols = @@(table_definition,"&columns")
-                            go foreach.fobj(index:i, key:key, value:value) with(cols)
+                            go foreach.fobj(index:i, key:key, value:opt) with(cols)
                             {
-                                class = ifstr(parse.bool(@@(value,'no-print')) ,'no-print', '')
-                                tmp = @@(value, 'template')
-                                #$ "edit-th"("type"="NoEditable" "field"="#<key>" "#<ifstr(tmp!='','template','')>"="#<tmp>" class="#<class>"){$"#<@@(value,'caption')>"}
+                                align = ifstr(field.exist(opt,"align"), @@(opt,"$align"), @@(opt,"$textalign"))
+                                format = ifstr(parse.bool(@@(opt,"$format")), "true", "false")
+                                thousandssep = ifstr(parse.bool(@@(opt,"$thousandssep")), "true", "false")
+                                decs = if(@@(opt,"#decs") <= 0, 1, @@(opt,"#decs"))
+                                prefix = @@(opt,"$prefix")
+                                sufix = @@(opt,"$sufix")
+                                class = ifstr(parse.bool(@@(opt,"no-print")), "no-print", "")
+                                minwidth = ifstr(field.exist(opt,"min-width"), @@(opt,"$min-width"), @@(opt,"$minwidth"))
+                                width = @@(opt,"$width")
+                                maxwidth = ifstr(field.exist(opt,"max-width"), @@(opt,"$max-width"), @@(opt,"$maxwidth"))
+                                maxlength = ifstr(field.exist(opt,"max-length"), @@(opt,"$max-length"), @@(opt,"$maxlength"))
+                                template = @@(opt,'$template') // Establecer contenido de la columna sin tomar de la lista de objetos.
+                                
+                                // Definición de columnas
+                                
+                                #$
+                                "edit-th"(
+                                    type="NoEditable"
+                                    field="#<key>"
+                                    textalign="#<align>"
+                                    format="#<format>"
+                                    thousandssep="#<thousandssep>"
+                                    decs="#<decs>"
+                                    prefix="#<prefix>"
+                                    sufix="#<sufix>"
+                                    class="#<class>"
+                                    "#<ifstr(minwidth!='','minwidth','')>"="#<minwidth>"
+                                    "#<ifstr(width!='','width','')>"="#<width>"
+                                    "#<ifstr(maxwidth!='','maxwidth','')>"="#<maxwidth>"
+                                    "#<ifstr(maxlength!='','maxlength','')>"="#<maxlength>"
+                                    "#<ifstr(template!='','template','')>"="#<template>"
+                                ){$"#<@@(opt,'caption')>"}
                             }
                         }
                     }
@@ -54,7 +83,7 @@ module
                 #$ div(class="text-center") { h6(style="background-color: #F5F5F5; padding: 10rem 0;"){"#<message>"} }
             }
             #! else {
-                #$ small(class="text-secondary"){$"#<replace(tableLeyend,'#',lenght)>"}
+                #$ small(class="text-secondary" id="#<table_id>_leyend"){$"#<replace(tableLeyend,'#',lenght)>"}
             }
 
             script{$'
