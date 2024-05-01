@@ -29,8 +29,8 @@ module ""
     @link_banr = @@(confg,"$banner_add_link")
     @logo_sURL = field.dstr(confg,"logo","https://plazamundial.net/_img/plazamundial-v2c.png")
     @logo_link = field.dstr(confg,"logo_link","/")
-    @back_colr = field.dstr(confg,"nav_and_footer_backcolor","#099803")
-    @text_colr = field.dstr(confg,"nav_and_footer_textcolor","#FFF")
+    @back_colr = field.dstr(confg,"nav_and_footer_backcolor","#FFF")
+    @text_colr = field.dstr(confg,"nav_and_footer_textcolor","#000")
     @hide_srch = parse.bool(@@(confg,"#hide_search"))
 
     print_session_button::
@@ -135,9 +135,9 @@ module ""
                     <!-- =============== SECCIÓN 2 [Buscar y menú] =============== -->
 
                     <div class="col-sm-4">
-                        <div>
-                            <input type="search" class="form-control rounded-0 shadow-none #<ifstr(@hide_srch,"d-none","")>" placeholder="Buscar">
-                        </div>
+                        <form action="/-/r/" method="GET">
+                            <input type="search" name="q" value="#<@@(@http_context,"request/get/q")>" class="form-control rounded-0 shadow-none #<ifstr(@hide_srch,"d-none","")>" placeholder="Buscar">
+                        </form>
                         <div>
                             <!-- <h4 class="m-0">Área de menú</h4> -->
                         </div>
