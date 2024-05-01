@@ -35,6 +35,7 @@ git -C "..\userext" pull https://%1@github.com/Induxsoft/userext.git
 git -C "..\orgcat" pull https://%1@github.com/Induxsoft/orgcat.git
 git -C "..\cmpreq" pull https://%1@github.com/Induxsoft/cmpreq.git
 git -C "..\rhgfcdi" pull https://%1@github.com/Induxsoft/rhgfcdi.git
+git -C "..\lgcli" pull https://%1@github.com/Induxsoft/lgcli.git
 GOTO EOF
 
 :ERROR1
