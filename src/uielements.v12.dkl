@@ -94,6 +94,18 @@ module
                         table.AutoAddRow = false;
                         table.AutoDelRow = false;
                         table.EverMove = false;
+
+                        table.Events[table.EdiTable.Const.Events.OnSort] = (e) =>
+                        {
+                            const table_leyend = document.getElementById("#<table_id>_leyend");
+                            let length = (table?.DataArray ?? []).length;
+                            let leyend = "No se encontraron resultados.";
+
+                            if (length > 0) leyend = "Mostrando los primeros "+length+" registros";
+                            if (e && length > 0) leyend += " ordenados por "+e.caption+" "+e.coldef.sort;
+
+                            table_leyend.textContent = leyend;
+                        }
                     }
                 });
             '}
