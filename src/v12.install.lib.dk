@@ -190,6 +190,7 @@ if dir.exists(path_tasks)
     
     do print("\nCREANDO GRUPO DE TAREAS E IMPORTANDO PROGRAMAS")
 
+    if not(isset("@jobs_group_id")) { @jobs_group_id = "" }
     if @jobs_group_id == ""
     {
         sql_pack_prefix = "SELECT SUBSTRING(sct.id,1,2) AS prefix FROM sys_app_catalog AS cat INNER JOIN sys_app_shortcut AS sct ON cat.app_id = sct.appid WHERE cat.pack_id = '#<pack_name>' LIMIT 1;"
