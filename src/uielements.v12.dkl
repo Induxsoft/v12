@@ -80,7 +80,7 @@ module
                 // if field.exist(get,"s") && @@(get,"$s") == "" { message = "Sin registros." }
                 // else { message = "Sin resultados." }
                 
-                #$ div(class="text-center") { h6(style="background-color: #F5F5F5; padding: 10rem 0;"){"#<message>"} }
+                #$ div(class="text-center" id="msg_#<table_id>") { h6(style="background-color: #F5F5F5; padding: 10rem 0;"){"#<message>"} }
             }
             #! else {
                 #$ small(class="text-secondary" id="#<table_id>_leyend"){$"#<replace(tableLeyend,'#',lenght)>"}
