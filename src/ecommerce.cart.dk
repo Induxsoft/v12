@@ -1,0 +1,264 @@
+#include "dkli.dkh"
+#!
+module ":ecommerce.cart"
+{
+    /*
+    Estructuras de objetos de retorno utilizados
+    Carrito 
+        {
+            id:"id del carrito (sys_guid)",
+            creacion:"sys_dtcreated",
+            actualizacion:"sys_timstamp",
+            cliente:{codigo:"",nombre:""},
+            status:abierto|cerrado|cancelado",
+            subtotal:
+            descuentos:
+            impuestos:
+            total:Importe total del carrito
+            _items:[{detalle del carrito (productos)},...]
+        }
+    Producto agregado o modificado
+        {
+            id:sys_pk de la tabla ecomm_cart_det
+            producto:{sku:"",descrip:"",unidad:""},
+            ...Los demás campos de la entidad ecomm_cart_det
+        }
+    
+    */
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /*
+    ecommerce.cart.add
+    Agrega un producto a un carrito abierto, si no hay ninguno abierto crea uno nuevo
+    Parámetros:
+        - db Es una referencia a la base de datos
+        - params Es un objeto con los siguientes miembros:
+            * ids:"sesión de usuario (puede omitirse)"
+            * cliente:"Código de cliente, requiere ids"
+            * sku:"Código de producto"
+            * cant:Cantidad en unidades (nuevo registro de prod en carrito)
+            * id:"Id de carrito"
+            * nota:Texto de nota para el producto
+
+    Valor de retorno:
+        Referencia al carrito y al elemento modificado:
+        {
+            item:Producto agregado,
+            cart:Carrito
+        }
+    */
+    add::&db,&params
+    {
+        namespace "ecommerce.cart"
+
+        ref user = get_user_client(db, params)
+        ref cart = get_shopping_cart(db, user)
+        ref prod = dbr.rec(db, "SELECT sys_pk, codigo, descripcion, unidad FROM producto WHERE codigo = @sku LIMIT 1;", params)
+
+        if isnull(cart){ do rise_error(0, "No fué posible obtener el carrito de compras. " + last_error()) }
+        if isnull(prod){ do rise_error(0, "No existe un producto con el sku proporcionado") }
+
+        new cart_detail
+        {
+            @"ref_cart": @@(cart, "#sys_pk")
+            @"ref_prdo": @@(prod, "#sys_pk")
+            @"cantidad": @@(params, "#cant")
+            @"unidad": @@(prod, "$unidad")
+            @"precio" decimal(12,4) required
+            @"numprecio" int required // Número de precio que se usó
+            @"descuentos" decimal(12,4)
+            @"impuestos" decimal(12,4)
+            @"notas" memo
+            @"cupon" string(45) // Código de descuento aplicado
+        }
+    }
+
+    /*
+    ecommerce.cart.qty
+    Incrementa o disminuye la cantidad un producto en un carrito
+    Parámetros:
+        - db Es una referencia a la base de datos
+        - params Es un objeto con los siguientes miembros:
+            * ids:"sesión de usuario (puede omitirse)"
+            * item_id: Clave (sys_pk) del elemento en ecomm_cart_det
+            * id:"Id de carrito"
+            * cant (valor positivo incrementa, negativo disminuye)
+
+    Valor de retorno:
+        Referencia al carrito y al elemento modificado
+        {
+            item:Producto modificado,
+            cart:Carrito
+        }
+    */
+    qty::&db,&params
+    {
+        namespace "ecommerce.cart"
+    }
+    /*
+    ecommerce.cart.del
+    Elimina un producto en un carrito
+    Parámetros:
+        - db Es una referencia a la base de datos
+        - params Es un objeto con los siguientes miembros:
+            * ids:"sesión de usuario (puede omitirse)"
+            * item_id: Clave (sys_pk) del elemento en ecomm_cart_det
+            * id:"Id de carrito"
+
+    Valor de retorno:
+        Referencia al carrito 
+            
+    */
+    del::&db,&params
+    {
+        namespace "ecommerce.cart"
+    }
+
+    /*
+    ecommerce.cart.updt
+    Actualiza otros campos de un producto
+    Parámetros:
+        - db Es una referencia a la base de datos
+        - params Es un objeto con los siguientes miembros:
+            * ids:"sesión de usuario (puede omitirse)"
+            * prod_id: Clave (sys_pk) del elemento en ecomm_cart_det
+            * id:"Id de carrito"
+            * notas: Notas del producto
+            ...
+
+    Valor de retorno:
+        Referencia al carrito y al elemento modificado
+        {
+            item:Producto modificado,
+            cart:Carrito
+        }
+    */
+    updt::&db,&params
+    {
+        namespace "ecommerce.cart"
+    }
+
+    /*
+    ecommerce.cart.owner
+    Establece un usuario o cliente para un carrito
+    Parámetros:
+        - db Es una referencia a la base de datos
+        - params Es un objeto con los siguientes miembros:
+            * ids:"sesión de usuario (puede omitirse)"
+            * cliente:"Código de cliente, requiere ids"
+            * id:"Id de carrito"
+
+    Valor de retorno:
+        Referencia al carrito
+    */
+    owner::&db,&params
+    {
+        namespace "ecommerce.cart"
+    }
+
+    /*
+    ecommerce.cart.send
+    Establece la dirección e indicaciones de entrega, además de relacionar al usuario o cliente si aun no se ha hecho
+    Parámetros:
+        - db Es una referencia a la base de datos
+        - params Es un objeto con los siguientes miembros:
+            * id:"Id de carrito (requerido)"
+            * ids:"sesión de usuario (puede omitirse)"
+            * cliente:"Código de cliente, requiere ids"
+            * dir_id: Clave (sys_pk) de la dirección del usuario a la que se enviará
+            * dir:{} Objeto con todos los datos de la dirección para darla de alta (excluye dir_id)
+            * usuario:{} Objeto con todos los datos del usuario si aun no se ha dado de alta
+
+    Valor de retorno:
+        Referencia al carrito
+    */
+    send::&db,&params
+    {
+        namespace "ecommerce.cart"
+    }
+
+    /*
+    ecommerce.cart.pay
+    Establece el pago, además de relacionar al usuario o cliente si aun no se ha hecho
+    Parámetros:
+        - db Es una referencia a la base de datos
+        - params Es un objeto con los siguientes miembros:
+            * id:"Id de carrito (requerido)"
+            * ids:"sesión de usuario (puede omitirse)"
+            * cliente:"Código de cliente, requiere ids"
+            * forma_pago: Clave (id) de la enumeración de formas de pago
+            * codigo_pago: Identificador de un pago en línea
+
+    Valor de retorno:
+        Referencia al carrito
+    */
+    pay::&db,&params
+    {
+        namespace "ecommerce.cart"
+    }
+
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // FUNCIONES DE UTILIDAD
+    get_user_client::&db,&params
+    {
+        if trim(@@(params,"$cliente")) != "" && trim(@@(params,"$ids")) == ""
+        {
+            do rise_error(0, "El id de sesión (ids) es requerido cuando se indica el código de cliente")
+        }
+        
+        new prm { @"ids": @@(params, "$ids") }
+        ref usr = dbr.rec(db, "SELECT u.sys_pk FROM tuser u INNER JOIN sys_session s ON u.sys_pk = s.iuser WHERE s.sys_guid = @ids LIMIT 1", prm)
+        ref ucl = @null
+
+        if trim(@@(params,"$cliente")) != ""
+        {
+            if isnull(usr) { do rise_error(0, "No existe el usuario con el ids indicado") }
+            prm<"usr">: @@(usr,"sys_pk")
+            ref ucl = dbr.rec(db, "SELECT uc.sys_pk FROM usrcli uc INNER JOIN cliente c ON uc.cliente = c.sys_pk WHERE c.codigo = @cliente AND uc.usuario = @usr LIMIT 1;", prm)
+        }
+
+        new res
+        {
+            @"user*": usr
+            @"clie*": ucl
+        }
+        return res
+    }
+    get_shopping_cart::&db,&user_client
+    {
+        ref user = @@(user_client,"&user")
+        ref clie = @@(user_client,"&clie")
+        ref cart = @null
+        
+        if not(isnull(user))
+        {
+            ref cart = dbr.rec(db, "SELECT * FROM ecomm_cart WHERE ref_user = @sys_pk AND status = 0 LIMIT 1;", user)
+        }
+        else if trim(@@(params,"$id")) == ""
+        {
+            new prm { @"id": @@(params,"id") }
+            ref cart = dbr.rec(db, "SELECT * FROM ecomm_cart WHERE sys_guid = @id AND status = 0 LIMIT 1;", prm)
+        }
+
+        if isnull(cart)
+        {
+            new cart_data
+            {
+                @"sys_recver": 0
+                @"sys_guid": uuid()
+                @"sys_timestamp*": now()
+                @"status": 0 //Abierto
+            }
+            if not(isnull(user)){ cart_data<"ref_user">: @@(user,"#sys_pk") }
+            if not(isnull(clie)){ cart_data<"ref_cliente">: @@(clie,"#sys_pk") }
+
+            do dbr.insert(db, "ecomm_cart", cart_data)
+            prm<"id">: @@(cart_data,"sys_guid")
+            ref cart = dbr.rec(db, "SELECT * FROM ecomm_cart WHERE sys_guid = @id LIMIT 1;", prm)
+        }
+
+        return cart
+        exception{ return @null }
+    }
+}
