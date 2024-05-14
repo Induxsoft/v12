@@ -217,7 +217,7 @@ class InputKey extends HTMLElement
     change_event = null;
     onBeforeSearch = null;
     buttonElements = [];
-    shadow=null;
+
     constructor() 
     {
         super();
@@ -243,7 +243,8 @@ class InputKey extends HTMLElement
             this.colcaptions = this.getAttribute('colcaptions');
 
             //=============== 1 SECTION [ MAIN CONTROL ]
-            this.shadow = this.attachShadow({ mode: 'closed' });
+            
+            const shadow = this.attachShadow({ mode: 'closed' });
             this.inputv = this.createFullElement('input', {id:'inputv', type:'text', value:`${this.getAttribute('value')??''}`, name:`${this.getAttribute('name')}`, style:'opacity: 0 !important;width: 1px !important; height:1px !important; border:none !important; outline:none !important; box-shadow:none !important; padding:0 !important; margin: 0 !important; pointer-events: none !important; background-color: transparent !important; position:relative !important; display:block !important; top:-15px !important;'});
             const container = this.createFullElement('div', {id:'container'});
             const search_container = this.createFullElement('div', {id:'search_container'});
@@ -479,7 +480,7 @@ class InputKey extends HTMLElement
             
             //=============== STYLES
 
-            this.shadow.innerHTML = `
+            shadow.innerHTML = `
                 <style>
                     /* ========== General */
                     *{ box-sizing: border-box; margin: 0; padding: 0; }
@@ -539,10 +540,10 @@ class InputKey extends HTMLElement
                 </style>
             `;
 
-            this.shadow.appendChild(container);
-            this.shadow.appendChild(this.container2);
-            this.shadow.appendChild(container3);
-            this.shadow.appendChild(container4);
+            shadow.appendChild(container);
+            shadow.appendChild(this.container2);
+            shadow.appendChild(container3);
+            shadow.appendChild(container4);
             
             if (this._parseBool((this.getAttribute('hidden-input')??''), true)) this.after(this.inputv);
 
@@ -556,9 +557,7 @@ class InputKey extends HTMLElement
                         this.setValue(initvalue);
                     }
                     
-                }catch(e)
-                {
-                    console.log(e)
+                }catch{
                     alert('El valor del atributo "data-value" tiene un formato JSON inválido');
                 }
             }

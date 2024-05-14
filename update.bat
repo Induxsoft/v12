@@ -36,6 +36,7 @@ git -C "..\orgcat" pull https://%1@github.com/Induxsoft/orgcat.git
 git -C "..\cmpreq" pull https://%1@github.com/Induxsoft/cmpreq.git
 git -C "..\rhgfcdi" pull https://%1@github.com/Induxsoft/rhgfcdi.git
 git -C "..\lgcli" pull https://%1@github.com/Induxsoft/lgcli.git
+git -C "..\rhgt" pull https://%1@github.com/Induxsoft/rhgt.git
 GOTO EOF
 
 :ERROR1

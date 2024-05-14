@@ -40,6 +40,7 @@ mkdir %1
 "C:\Program Files\7-Zip\7z.exe" a -r %1\cmpreq.zip ..\cmpreq\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\rhgfcdi.zip ..\rhgfcdi\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\lgcli.zip ..\lgcli\src\*
+"C:\Program Files\7-Zip\7z.exe" a -r %1\rhgt.zip ..\rhgt\src\*
 GOTO EOF
 
 :ERROR1
