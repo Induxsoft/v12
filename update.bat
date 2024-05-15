@@ -27,7 +27,7 @@ git -C "..\sitesman" pull https://%1@github.com/Induxsoft/sitesman.git
 git -C "..\r5iv12" pull https://%1@github.com/Induxsoft/r5iv12.git
 git -C "..\catfab" pull https://%1@github.com/Induxsoft/catfab.git
 git -C "..\rhrs" pull https://%1@github.com/Induxsoft/rhrs.git
-git -C "..\sigesac" pull https://%1@github.com/Induxsoft/sigesac.git
+git -C "..\sigesac" pull https://%1@github.com/sipbsa/sigesac.git
 git -C "..\dkl-batch-api" pull https://%1@github.com/Induxsoft/dkl-batch-api.git
 git -C "..\STGT_guarderias2024" pull https://%1@github.com/Induxsoft/STGT_guarderias2024.git
 git -C "..\alibeb" pull https://%1@github.com/Induxsoft/alibeb.git
@@ -37,6 +37,7 @@ git -C "..\cmpreq" pull https://%1@github.com/Induxsoft/cmpreq.git
 git -C "..\rhgfcdi" pull https://%1@github.com/Induxsoft/rhgfcdi.git
 git -C "..\lgcli" pull https://%1@github.com/Induxsoft/lgcli.git
 git -C "..\rhgt" pull https://%1@github.com/Induxsoft/rhgt.git
+git -C "..\stgt_recargas_2024" pull https://%1@github.com/Induxsoft/stgt_recargas_2024.git
 GOTO EOF
 
 :ERROR1
