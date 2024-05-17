@@ -32,6 +32,9 @@ module ""
     @back_colr = field.dstr(confg,"nav_and_footer_backcolor","#FFF")
     @text_colr = field.dstr(confg,"nav_and_footer_textcolor","#000")
     @hide_srch = parse.bool(@@(confg,"#hide_search"))
+    @text_footer=field.dstr(confg,"text_footer","E-Commerce | Powered by Devkron")
+
+    @__getParameterOutputType="_output"
 
     print_session_button::
     {
@@ -101,6 +104,8 @@ module ""
     
     print_navbar::
     {
+        if @@(@http_context,"request/get/"+@__getParameterOutputType)=="_raw"{return ""}
+
         template = '
             <style>
                 .navbar .btn{ color: inherit !important; }
@@ -173,9 +178,11 @@ module ""
     
     print_footer::
     {
+        if @@(@http_context,"request/get/"+@__getParameterOutputType)=="_raw"{return ""}
+
         template = '
             <footer class="fixed-bottom text-center border-top p-1" style="background-color: #<@back_colr>; color: #<@text_colr>;">
-                E-Commerce | Powered by Devkron
+                #<@text_footer>
             </footer>
         '
         return ftext(template)
