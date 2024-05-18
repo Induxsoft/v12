@@ -42,7 +42,7 @@ module ""
         if @@(@http_context, "session/user/ids") != ""
         {
             btn = ftext('
-                <div class="dropdown">
+                <div class="dropdown dropstart">
                     <button  class="btn btn-sm bg-transparent dropdown-toggle" id="profile_dropdown" data-bs-toggle="dropdown">
                         #<@@(@http_context,"session/user/name")>
                     </button >
