@@ -1099,8 +1099,8 @@ class CheckList extends HTMLElement
                     .in-done-list .list-item .movItem{ pointer-events: none !important; opacity: 0 !important; }
                     .container-checks{ display: flex; justify-content: center; align-items: center; gap: 10px; }
                     .rd-item-yes, rd-item-no{ width: 1rem; height: 1rem; }
-                    .rd-item-yes::before{ content:'Si'; position:relative;top:-16px;left:2px;font-size:.7rem; color:#CCC; }
-                    .rd-item-no::before{ content:'No'; position:relative;top:-16px;font-size:.7rem; color:#CCC; }
+                    .rd-item-yes::before{ content:'Si'; position:relative;top:-16px;left:2px;font-size:.7rem; color:#CCC;width: 100% !important;display: flex; }
+                    .rd-item-no::before{ content:'No'; position:relative;top:-16px;font-size:.7rem; color:#CCC;width: 100% !important;display: flex; }
                     .rd-item-yes:hover::before{ color:#000; }
                     .rd-item-no:hover::before{ color:#000; }
                     `+ (this.getAttribute("control-styles") ?? '') +`
