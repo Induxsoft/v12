@@ -30,7 +30,7 @@ program ""
     do _map_function(lib_csv,"devkron.serialize.csv.csvHelper","CsvWrite","CsvWrite","System.String,*System.Object","void")
 
 
-    sql_actions_pack="SELECT a.id,a.title,a.shorttitle,a.icon16x16,a.href,a._blank,a.app_id appid,a.det itemtype,a.req_context_item_id,a.act_type 
+    sql_actions_pack="SELECT a.id,a.title,a.shorttitle,a.icon16x16,a.href,if(a._blank,'1','0')_blank,a.app_id appid,a.det itemtype,if(a.req_context_item_id,'1','0')req_context_item_id,a.act_type 
         FROM induxsoft.meta_v12actions a WHERE a.pack_id=@pack_id
         AND a.act_type<>'sortcut' AND NOT ISNULL(a.href)"
 
