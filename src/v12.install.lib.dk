@@ -51,7 +51,7 @@ reconnect::&db,qn
 
 //* ======================================== [ EJECUCIÓN DEL PROGRAMA ]
 
-//#region Instalar modelo (.ddm) del paquete.
+//#region Instalar modelo (.ddm).
 if not(file.exists(model_file)) { do rise_error(99,"No se encontró el esquema: _install/ddm/" + model_name) }
 
 fext = file.extension(model_file)
@@ -76,6 +76,9 @@ if not(dbm.installModel(database,model_name,data_model)) { do rise_error(99,"No 
 do reconnect(database,qname)
 //#endregion
 
+if not(isset("@permissions_to_import")){ ref @permissions_to_import = list.create() }
+
+//#region Importar datos iniciales
 if dir.exists(path_initial_data) && list.count(@files_to_import) > 0
 {
     do print("\nIMPORTANDO DATOS INICIALES")
@@ -91,7 +94,9 @@ if dir.exists(path_initial_data) && list.count(@files_to_import) > 0
         }
     }
 }
+//#endregion
 
+//#region Establecer categorias
 if file.exists(categories_file)
 {
     do print("\nESTABLECIENDO CATEGORIAS")
@@ -99,7 +104,9 @@ if file.exists(categories_file)
     ref categoriesData = CsvRead(categories_file,"")
     do dbr.apps.category.import(database,categoriesData)
 }
+//#endregion
 
+//#region Establecer aplicaciones
 if file.exists(catalogs_file)
 {
     do print("\nESTABLECIENDO APLICACIONES")
@@ -107,7 +114,9 @@ if file.exists(catalogs_file)
     ref catalogsData = CsvRead(catalogs_file,"")
     do dbr.apps.import(database,catalogsData)
 }
+//#endregion
 
+//#region Establecer shortcuts
 if file.exists(shortcuts_file)
 {
     do print("\nESTABLECIENDO SHORTCUTS")
@@ -115,7 +124,9 @@ if file.exists(shortcuts_file)
     ref shortcutsData = CsvRead(shortcuts_file,"")
     do dbr.apps.shortcut.import(database,shortcutsData)
 }
+//#endregion
 
+//#region Establecer DET
 if file.exists(item_type_file)
 {
     do print("\nETABLECIENDO ENTIDADES")
@@ -123,7 +134,9 @@ if file.exists(item_type_file)
     ref itemsData = CsvRead(item_type_file,"")
     do dbr.apps.itemtype.import(database,itemsData)
 }
+//#endregion
 
+//#region Establecer acciones
 if file.exists(item_action_file)
 {
     do print("\nESTABLECIENDO ACCIONES")
@@ -131,7 +144,9 @@ if file.exists(item_action_file)
     ref actionsData = CsvRead(item_action_file,"")
     do dbr.apps.itemaction.import(database,actionsData)
 }
+//#endregion
 
+//#region Establecer variables
 if file.exists(vars_file)
 {
     do print("\nESTABLECIENDO VARIABLES DE CONFIGURACIÓN")
@@ -150,7 +165,9 @@ if file.exists(vars_file)
         }
     }
 }
+//#endregion
 
+//#region Registrar eventos
 if file.exists(events_file)
 {
     do print("\nREGISTRANDO EVENTOS")
@@ -167,15 +184,28 @@ if file.exists(events_file)
         do print(ftext("- #<sender_id>"))
     }
 }
+//#endregion
 
+//#region Importar privilegios
 if file.exists(sitem_file)
 {
     do print("\nIMPORTANDO PRIVILEGIOS")
 
     ref sitemData = CsvRead(sitem_file,"")
     do dbr.vars.ImportPrivs(database,sitemData)
-}
 
+    if list.count(@permissions_to_import) == 0
+    {
+        for i = 0; i < list.count(sitemData); i+1
+        {
+            ref item = list.obj(sitemData,i)
+            do list.add(@permissions_to_import,@@(item,"$itemid"))
+        }
+    }
+}
+//#endregion
+
+//#region Registrar privilegios
 if list.count(@permissions_to_import) > 0
 {
     do print("\nNUEVOS PRIVILEGIOS AL GRUPO DE ADMINISTRADORES")
@@ -183,7 +213,9 @@ if list.count(@permissions_to_import) > 0
     admins_groupid = dbr.security.admins(database)
     do dbr.security.assign(database,admins_groupid,@permissions_to_import)
 }
+//#endregion
 
+//#region Grupo de tareas
 if dir.exists(path_tasks)
 {
     include "batch.v12.dkl"
@@ -221,6 +253,7 @@ if dir.exists(path_tasks)
         do print(ftext("- #<task_jname>"))
     }
 }
+//#endregion
 
 if dbr.is_open(database){ do dbr.close(database) }
 

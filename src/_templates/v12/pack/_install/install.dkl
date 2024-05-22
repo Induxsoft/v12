@@ -14,6 +14,7 @@ program "instalador"
     ]')
 
     // Lista de privilegios iniciales (arreglo de id de privilegios)
+    // Si se omite [] -> se registra todo el contenido del fichero de privilegios.
     ref @permissions_to_import = from.json('[
         "id_priv1",
         "id_priv2"
