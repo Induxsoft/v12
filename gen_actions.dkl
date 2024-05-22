@@ -1,0 +1,43 @@
+#include "dkli.dkh"
+#!
+program ""
+{
+    #include "functions.dkh"
+    #include "serialize.dkh"
+    #include "dbr.dkh"
+
+    ref args = commandline("=")
+
+    qname = trim(@@(args,"$db"))
+    pack_id = trim(@@(args,"$pack"))
+    dir_out = trim(@@(args,"$out"))
+    
+    if qname == "" { qname = trim(@@(args,"$bd")) }
+    if qname == "" { qname = trim(@@(args,"$qn")) }
+
+    if qname == "" { do rise_error(500,"No se indico el nombre cualificado de conexión `db` (db=miconexion@grupoapps).") }
+    if pack_id == "" { do rise_error(500,"No se indico el id de un paquete `pack`.") }
+    if not(dir.exists(dir_out)) { dir_out = dir.name(_get(@_run_settings,"$SourceCodeFile")) }
+
+    ref db = dbr.open(qname)
+    new params { @"pack_id": pack_id }
+
+    file_name = "sys_app_item_action.csv"
+    file_out = path.concat(dir_out,file_name)
+
+    ref lib_csv = _import_library("devkron.serialize.csv.dll")
+    do _map_function(lib_csv,"devkron.serialize.csv.csvHelper","CsvRead","CsvRead","System.String,System.String","*")
+    do _map_function(lib_csv,"devkron.serialize.csv.csvHelper","CsvWrite","CsvWrite","System.String,*System.Object","void")
+
+
+    sql_actions_pack="SELECT a.id,a.title,a.shorttitle,a.icon16x16,a.href,a._blank,a.app_id appid,a.det itemtype,a.req_context_item_id,a.act_type 
+        FROM induxsoft.meta_v12actions a WHERE a.pack_id=@pack_id
+        AND a.act_type<>'sortcut' AND NOT ISNULL(a.href)"
+
+    ref actions = dbr.list(db,sql_actions_pack,params)
+
+    do file.wtext(file_out,"id,title,shorttitle,icon16x16,href,_blank,appid,itemtype,req_context_item_id,act_type")
+
+    do CsvWrite(file_out,actions)
+
+}
