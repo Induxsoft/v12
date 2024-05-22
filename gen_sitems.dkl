@@ -1,0 +1,115 @@
+#include "dkli.dkh"
+#!
+program "Generar privilegios de paquetes"
+{
+    #include "functions.dkh"
+    #include "serialize.dkh"
+    #include "dbr.dkh"
+
+    ref args = commandline("=")
+
+    qname = trim(@@(args,"$db"))
+    pack_id = trim(@@(args,"$pack"))
+    dir_out = trim(@@(args,"$out"))
+    
+    if qname == "" { qname = trim(@@(args,"$bd")) }
+    if qname == "" { qname = trim(@@(args,"$qn")) }
+
+    if qname == "" { do rise_error(500,"No se indico el nombre cualificado de conexión `db` (db=miconexion@grupoapps).") }
+    if pack_id == "" { do rise_error(500,"No se indico el id de un paquete `pack`.") }
+    if not(dir.exists(dir_out)) { dir_out = dir.name(_get(@_run_settings,"$SourceCodeFile")) }
+
+    ref db = dbr.open(qname)
+    new params { @"pack_id": pack_id }
+
+    file_name = "sitem.csv"
+    file_out = path.concat(dir_out,file_name)
+
+    ref lib_csv = _import_library("devkron.serialize.csv.dll")
+    do _map_function(lib_csv,"devkron.serialize.csv.csvHelper","CsvRead","CsvRead","System.String,System.String","*")
+    do _map_function(lib_csv,"devkron.serialize.csv.csvHelper","CsvWrite","CsvWrite","System.String,*System.Object","void")
+
+    sql_actions_pack = "
+    SELECT
+        m.pack_id,
+        i.title pack_title,
+        m.app_id,
+        (
+            SELECT
+                x.title
+            FROM
+                induxsoft.prj_item x
+            WHERE
+                x.tpy = 2
+                AND x.ref_proj = 1
+                AND x.id = REPLACE(m.app_id, concat(m.pack_id, '.'), '')
+                AND x.ref_parent = i.sys_pk
+        ) app_title,
+        m.id,
+        m.title,
+        m.shorttitle,
+        m.act_type,
+        m.det,
+        d.caption det_caption
+    FROM
+        induxsoft.meta_v12actions m
+        LEFT JOIN induxsoft.prj_item i ON i.id = m.pack_id
+        LEFT JOIN induxsoft.meta_v12dte d ON d.id = m.det
+    WHERE
+        i.tpy = 1
+        AND i.ref_proj = 1
+        AND m.pack_id = @pack_id
+    ORDER BY
+        m.id;
+    "
+    ref actions = dbr.list(db,sql_actions_pack,params)
+
+    do file.wtext(file_out,"itemid,description,itemparent")
+   
+    ult_id_pack=""
+    ult_id_app=""
+
+    ref lista=list.create()
+
+    for i = 0; i < list.count(actions); i+1
+    {
+        ref act = list.obj(actions,i)
+
+        if ult_id_pack!=@@(act,"$pack_id")
+        {
+            ref sitem=record.create()
+            using sitem
+            {
+                @"itemid": @@(act,"$pack_id")
+                @"description": @@(act,"$pack_title")
+                @"itemparent": "\\0"
+            }
+            ult_id_pack=@@(act,"$pack_id")
+            do list.add(lista,sitem)
+        }
+
+        if ult_id_app!=@@(act,"$app_id")
+        {
+            ref sitem=record.create()
+            using sitem
+            {
+                @"itemid": @@(act,"$app_id")
+                @"description": @@(act,"$app_title")
+                @"itemparent": @@(act,"$pack_id")
+            }
+            ult_id_app=@@(act,"$app_id")
+            do list.add(lista,sitem)
+        }
+        
+        ref sitem=record.create()
+        using sitem
+        {
+            @"itemid": @@(act,"$id")
+            @"description": @@(act,"$title")
+            @"itemparent": @@(act,"$app_id")
+        }
+        do list.add(lista,sitem)
+    }
+
+    do CsvWrite(file_out,lista)
+}
