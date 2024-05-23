@@ -45,7 +45,7 @@ program ""
         induxsoft.meta_v12actions a
     WHERE
         a.pack_id = @pack_id
-        AND a.act_type <> 'sortcut'
+        AND a.act_type <> 'shortcut'
         AND NOT ISNULL(a.href)
     "
 
