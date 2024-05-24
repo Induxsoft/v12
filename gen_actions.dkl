@@ -44,9 +44,9 @@ program ""
     FROM
         induxsoft.meta_v12actions a
     WHERE
-        a.pack_id = @pack_id
-        AND a.act_type <> 'shortcut'
-        AND NOT ISNULL(a.href)
+        a.act_type <> 'shortcut'
+        AND TRIM(IFNULL(a.href,'')) <> ''
+        AND a.pack_id = @pack_id
     "
 
     ref actions = dbr.list(db,sql_actions_pack,params)
@@ -54,5 +54,4 @@ program ""
     do file.wtext(file_out,"id,title,shorttitle,icon16x16,href,_blank,appid,itemtype,req_context_item_id,act_type")
 
     do CsvWrite(file_out,actions)
-
 }
