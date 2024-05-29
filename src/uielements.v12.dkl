@@ -7,6 +7,13 @@ module
     #include "uielements.dbtable.dkl"
     #include "serialize.dkh"
 
+    uie.print_from_url_field::
+    {
+        #$
+        input(type="hidden" name="---from_url" value="#<ifstr(@('$parameters/---from_url')=='', @('$http/request/headers/HTTP_REFERER'), @('$parameters/---from_url'))>")
+        ##
+    }
+
     function uie.dbeditable(&table_definition, table_id)
     {
         ref datatable = @@(table_definition, "&datatable")
