@@ -60,6 +60,8 @@ program "Generar privilegios de paquetes"
         AND i.ref_proj = 1
         AND m.pack_id = @pack_id
     ORDER BY
+        m.pack_id,
+        m.app_id,
         m.id;
     "
     ref actions = dbr.list(db,sql_actions_pack,params)

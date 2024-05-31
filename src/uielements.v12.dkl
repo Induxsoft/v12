@@ -7,6 +7,17 @@ module
     #include "uielements.dbtable.dkl"
     #include "serialize.dkh"
 
+    uie.print_from_url_field::
+    {
+        if @("$parameters/_from_url_e")!="" { url=url_dcode(@("$parameters/_from_url_e"))}
+        else { url=ifstr(@('$parameters/---from_url')=='', @('$http/request/headers/HTTP_REFERER'), @('$parameters/---from_url')) }
+        eurl=url_encode(url)
+        #$
+        //input(type="hidden" name="---from_url" value="#<url>")
+        input(type="hidden" id="---from_url_e" name="---from_url_e" value="#<eurl>")
+        ##
+    }
+
     function uie.dbeditable(&table_definition, table_id)
     {
         ref datatable = @@(table_definition, "&datatable")
@@ -163,9 +174,15 @@ module
         ref m_acts = @@(config, "&buttons")
         ref tmpact = from.json(to.json(actlst))
         title_view = field.dstr(config, "title", "")
-        urlexitbtn = field.dstr(config, "urlexit", "/")
+        urlexitbtn = field.dstr(config, "urlexit", "javascript:window.history.back();")
         main_list = field.dstr(config, "main", "")
         js_fncname = field.dstr(config, "jscurrentcontext", "")
+
+        if not(field.exist(config,"urlexit"))
+        {
+            if @("$parameters/_from_url_e")!="" { urlexitbtn=url_dcode(@("$parameters/_from_url_e"))}
+            else { urlexitbtn= ifstr(@('$parameters/---from_url')=='', @('$http/request/headers/HTTP_REFERER'), @('$parameters/---from_url')) }
+        }
 
         btn_cls = "btn btn-sm border-secondary induxsoft-corners btn-main-action no-print"
         url_trg = ifstr(urlexitbtn=="/", "_top", "_self")
@@ -237,7 +254,7 @@ module
                                     #$ li{ button(type="button" class="#<btn_cls>" title="Imprimir" onclick="window.print()"){$"#<@ICON_PRINTER>"} }
                                 }
                                 #! if not(parse.bool(field.dnum(hidden,"refresh",0))) {
-                                    #$ li{ button(type="button" class="#<btn_cls>" title="Refrescar" onclick="window.location.reload();"){$"#<@ICON_ARROW_CLOCKWISE>"} }
+                                    #$ li{ button(type="button" class="#<btn_cls>" title="Refrescar" onclick="v12navbar.reloadView();"){$"#<@ICON_ARROW_CLOCKWISE>"} }
                                 }
                                 #! if not(parse.bool(field.dnum(hidden,"exit",0))) {
                                     #$ li{ a(class="#<btn_cls> no-hidden" title="Salir" href="#<urlexitbtn>" target="#<url_trg>" id="btn_go_back"){$""} }
@@ -305,7 +322,18 @@ module
                             context = eval(fname+"()");
                         } catch(error){ }
                         return context;
-                    }
+                    },
+                    reloadView()
+                    {
+                        const eurl = document.getElementById("---from_url_e");
+                        let cur_url = window.location.href;
+
+                        if (eurl) {
+                            cur_url = InduxsoftCrudlModel.UrlAddParameter(cur_url,"_from_url_e",eurl.value);
+                        }
+
+                        window.location.href = cur_url;
+                    },
                 }
                 document.addEventListener("DOMContentLoaded", () => {
                     v12navbar.init();
