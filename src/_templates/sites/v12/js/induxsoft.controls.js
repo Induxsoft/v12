@@ -683,6 +683,7 @@ class InputKey extends HTMLElement
                     this.findValue(id);
                     resolve();
                 }, (dataFail) => {
+                    resolve();
                     alert("Ocurrió un error al invocar el servicio.\n\n" + dataFail);
                 });
             }
@@ -863,23 +864,35 @@ class InputKey extends HTMLElement
     }
     request(url, success, fail)
     {
-        fetch(url, {
+        fetch(url, 
+        {
             method: 'GET',
             mode: 'cors',
             headers:{
                 'Access-Control-Allow-Origin':'*'
             }
-        }).then(response => {
-            if (response.ok){
-                response.json().then(json => {
+        }).then(response => 
+        {
+            if (response.ok)
+            {
+                response.json().then(json => 
+                {
                     success(json);
-                });
+                }).catch(error => fail(error.message??error));
             }
             else{
-                fail("El servicio respondió con un estado unválido");
+                response.json().then(json => 
+                    {
+                        fail(json.message ??json);
+                    }).catch(error=>
+                    {
+                        fail(error.message??error)
+                    });
+                // fail("El servicio respondió con un estado unválido");
             }
         })
-        .catch(error => {
+        .catch(error => 
+        {
             fail(error.message);
         })
     }

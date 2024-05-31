@@ -37,6 +37,7 @@ git -C "..\cmpreq" pull https://%1@github.com/Induxsoft/cmpreq.git
 git -C "..\rhgfcdi" pull https://%1@github.com/Induxsoft/rhgfcdi.git
 git -C "..\lgcli" pull https://%1@github.com/Induxsoft/lgcli.git
 git -C "..\rhgt" pull https://%1@github.com/Induxsoft/rhgt.git
+git -C "..\mxcfdi" pull https://%1@github.com/Induxsoft/mxcfdi.git
 git -C "..\stgt_recargas_2024" pull https://%1@github.com/Induxsoft/stgt_recargas_2024.git
 GOTO EOF
 
