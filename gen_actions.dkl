@@ -42,7 +42,7 @@ program ""
         IF(a.req_context_item_id, 1, 0) req_context_item_id,
         a.act_type
     FROM
-        induxsoft.meta_v12actions a
+        meta_v12actions a
     WHERE
         a.act_type <> 'shortcut'
         AND TRIM(IFNULL(a.href,'')) <> ''
