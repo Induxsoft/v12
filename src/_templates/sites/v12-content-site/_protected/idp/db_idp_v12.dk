@@ -52,7 +52,7 @@ module "Proveedor de Identidades [Id Provider] desde base de datos"
 
         for i=0;i<@count(lteams)
         {
-            do list.add(@@(res,"&memberships/teams"),@@(@item(lteams,i),"group_uuid"))
+            do list.add(@@(res,"&memberships/teams"),@@(@item(lteams,i),"groupid"))
         }
 
         new idp
