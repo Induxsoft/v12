@@ -239,7 +239,7 @@ module
                             {
                                 ref btn = list.obj(main_buttons, i)
                                 if @@(btn,"$shorttitle")=="" { btn<"shorttitle">:cut(@@(btn,"$title"),25)}
-                                #$ li{ a(class="#<btn_cls> list-action" title="#<@@(btn,'$title')>" href="#" onclick="v12navbar.clickMainAction('#<@@(btn,'$id')>','#<@@(btn,'$href')>')"){$"#<@@(btn,'$shorttitle')>"} }
+                                #$ li{ a(class="#<btn_cls> list-action" title="#<@@(btn,'$title')>" id="v12_#<@@(btn,'$id')>" href="#" onclick="v12navbar.clickMainAction('#<@@(btn,'$id')>','#<@@(btn,'$href')>')"){$"#<@@(btn,'$shorttitle')>"} }
                             }
 
                             div(class="d-flex gap-1")
