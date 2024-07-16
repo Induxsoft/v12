@@ -238,8 +238,11 @@ module
                             for i = 0; i < list.count(main_buttons)
                             {
                                 ref btn = list.obj(main_buttons, i)
+                                reqcontext = parse.bool(@@(btn,"$req_context_item_id"))
+                                
                                 if @@(btn,"$shorttitle")=="" { btn<"shorttitle">:cut(@@(btn,"$title"),25)}
-                                #$ li{ a(class="#<btn_cls> list-action" title="#<@@(btn,'$title')>" id="v12_#<@@(btn,'$id')>" href="#" onclick="v12navbar.clickMainAction('#<@@(btn,'$id')>','#<@@(btn,'$href')>')"){$"#<@@(btn,'$shorttitle')>"} }
+                                
+                                #$ li{ a(class="#<btn_cls> v12-context-act-#<reqcontext> list-action" title="#<@@(btn,'$title')>" id="v12_#<@@(btn,'$id')>" href="#" onclick="v12navbar.clickMainAction('#<@@(btn,'$id')>','#<@@(btn,'$href')>')"){$"#<@@(btn,'$shorttitle')>"} }
                             }
 
                             div(class="d-flex gap-1")
@@ -272,7 +275,9 @@ module
             script{$'
                 var v12navbar =
                 {
-                    mainActions : #<to.json(tmpact)>,
+                    mainActions: #<to.json(tmpact)>,
+                    buttonsDisabled: false,
+
                     init()
                     {
                         const btn_actions = document.querySelectorAll(".list-action");
@@ -333,6 +338,18 @@ module
                         }
 
                         window.location.href = cur_url;
+                    },
+                    toggleButtonInteraction(disable)
+                    {
+                        if (this.buttonsDisabled == disable) return;
+
+                        document.querySelectorAll(".v12-context-act-1").forEach(v12btn => {
+                            v12btn.style.pointerEvents = (disable) ? "none" : "";
+                            v12btn.style.backgroundColor = (disable) ? "#e9ecef" : "";
+                            v12btn.style.opacity = (disable) ? "1" : "";
+                        });
+
+                        this.buttonsDisabled = disable;
                     },
                 }
                 document.addEventListener("DOMContentLoaded", () => {
