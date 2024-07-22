@@ -83,6 +83,7 @@ module ""
             <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-gtEjrD/SeCtmISkJkNUaaKMoLD0//ElJ19smozuHV6z3Iehds+3Ulb9Bn9Plx0x4" crossorigin="anonymous"></script>
 
             <!-- Induxsoft Web Components -->
+            <script src="/js/induxsoft.v12.ui.js"></script>
             <script src="/js/induxsoft.controls.js"></script>
             <script src="/js/induxsoft.controls.editable.js"></script>
             <script src="/js/induxsoft.crudl.model.js"></script>
