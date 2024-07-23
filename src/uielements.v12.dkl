@@ -276,7 +276,7 @@ module
                 var v12navbar =
                 {
                     mainActions: #<to.json(tmpact)>,
-                    buttonsDisabled: false,
+                    buttonsDisabled: false,iniciando:true,
 
                     init()
                     {
@@ -343,13 +343,22 @@ module
                     {
                         if (this.buttonsDisabled == disable) return;
 
-                        document.querySelectorAll(".v12-context-act-1").forEach(v12btn => {
-                            v12btn.style.pointerEvents = (disable) ? "none" : "";
-                            v12btn.style.backgroundColor = (disable) ? "#e9ecef" : "";
-                            v12btn.style.opacity = (disable) ? "1" : "";
-                        });
+                        const desactivar=()=>
+                        {
+                            document.querySelectorAll(".v12-context-act-1").forEach(v12btn => {
+                                v12btn.style.pointerEvents = (disable) ? "none" : "";
+                                v12btn.style.backgroundColor = (disable) ? "#e9ecef" : "";
+                                v12btn.style.opacity = (disable) ? "1" : "";
+                            });
 
-                        this.buttonsDisabled = disable;
+                            this.buttonsDisabled = disable;
+                            this.iniciando=false;
+                        }
+
+                        if(disable && !this.iniciando) 
+                            setTimeout(()=>{desactivar();},500);
+                        else 
+                            desactivar();
                     },
                 }
                 document.addEventListener("DOMContentLoaded", () => {
