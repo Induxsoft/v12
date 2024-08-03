@@ -39,6 +39,8 @@ git -C "..\lgcli" pull https://%1@github.com/Induxsoft/lgcli.git
 git -C "..\rhgt" pull https://%1@github.com/Induxsoft/rhgt.git
 git -C "..\mxcfdi" pull https://%1@github.com/Induxsoft/mxcfdi.git
 git -C "..\stgt_recargas_2024" pull https://%1@github.com/Induxsoft/stgt_recargas_2024.git
+git -C "..\stgt_recargas_2024" pull https://%1@github.com/Induxsoft/svr-se-contabilidad-nomina.git
+git -C "..\dprod" pull https://%1@https://github.com/Induxsoft/dprod.git
 GOTO EOF
 
 :ERROR1

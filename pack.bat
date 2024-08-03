@@ -42,6 +42,8 @@ mkdir %1
 "C:\Program Files\7-Zip\7z.exe" a -r %1\lgcli.zip ..\lgcli\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\rhgt.zip ..\rhgt\src\*
 "C:\Program Files\7-Zip\7z.exe" a -r %1\mxcfdi.zip ..\mxcfdi\src\*
+"C:\Program Files\7-Zip\7z.exe" a -r %1\gse.zip ..\svr-se-contabilidad-nomina\src\*
+"C:\Program Files\7-Zip\7z.exe" a -r %1\dprod.zip ..\dprod\src\*
 GOTO EOF
 
 :ERROR1
