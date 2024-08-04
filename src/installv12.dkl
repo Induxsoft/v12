@@ -18,6 +18,10 @@ program "InstallV12"
         do print("\t paquete1...paqueteN=Son nombres carpetas de paquetes desplegados")
         do print("\t db=Un nombre cualificado de conexión a una base de datos existente")
         do print("")
+        do print("Opcionalmente puede indicar también los argumentos para que pueda detectarse información de catálogo de los paquetes desplegados si ha usado otros repositorios que no son de Induxsoft:")
+        do print("\tfrom=<url_de_repositorio>/ (Siempre termine la url con /)")
+        do print("\tcat=<nombre del archivo de catálogo>")
+        do print("")
         do print('* Use comillas dobles " para encerrar los argumentos *')
         do print("")
         do print("Ejemplo:")
@@ -35,8 +39,50 @@ program "InstallV12"
         return @false
     }
 
+    @max_deep_recursive=30
+    @iterations=0
+
+    generar_lista::&packs,&catalog,&lista
+    {
+        @iterations=@iterations+1
+        if @iterations>@max_deep_recursive { return }
+
+        ref n_packs=list.create()
+        
+        for i=0;i<@count(packs)
+        {
+            pack=tolower(trim(list.str(packs,i)))
+            if pack!=""
+            {
+                ref components=@@(catalog,"&"+pack)
+                if isnull(components)
+                {
+                    //No está en el catálogo
+                    if file.extension(pack)=="" { pack=pack+@file_ext}
+                    if not(is_inlist(lista,pack))
+                    {
+                        do list.add(lista,pack)
+                    }
+                }
+                else
+                {
+                    for j=0;j<@count(components)
+                    {
+                        comp=trim(list.str(components,j))
+                        do list.add(n_packs,comp)
+                    }
+                    if @count(n_packs)>0{ do generar_lista(n_packs,catalog,lista) }
+                    do list.clear(n_packs)
+                }
+            }
+        }
+        
+       
+    }
+
     installer_list::source,install_folder, install_program,&lista
     {
+        if not(dir.exists(source)) { return }
         install_path=path.concat(source,install_folder)
         
         if dir.exists(install_path)
@@ -47,6 +93,7 @@ program "InstallV12"
                 if not(is_inlist(lista,install_file)) { do list.add(lista,install_file)}
             }
         }
+
         ref dirs=list.dirs(source)
 
         for i=0;i<@count(dirs)
@@ -64,16 +111,85 @@ program "InstallV12"
         
     }
 
+    analisis_catalogo::&op
+    {
+        md5_repo="_deployed/"+md5(@source_url)
+        c_f=path.concat(md5_repo,@cat_file)
+        if not(file.exists(c_f)) { return op }
+
+        ref np=list.create()
+        ref catalog=from.json(file.rtext(c_f))
+
+        for i=0;i<@count(op)
+        {
+            p=trim(list.str(op,i))
+            if field.exist(catalog,p)
+            {
+                ref packs=list.create()
+                ref lista=list.create()
+                do list.add(packs,p)
+                do generar_lista(packs,catalog,lista)
+                if @count(lista)<1 { do list.add(np,p) }
+                else
+                {
+                    ref lf=list.create()
+                    for j=0;j<@count(lista) 
+                    { 
+                        itm=trim(list.str(lista,j))
+                        if itm!=""
+                        {
+                            itm=file.justname(itm)
+                            m_file=path.concat(md5_repo,itm+".manifest")
+                            if file.exists(m_file)
+                            {
+                                ref m=from.json(file.rtext(m_file))
+                                if field.exist(m,"installable")
+                                {
+                                    if @count(@@(m,"&installable"))<1 { do list.add(np,itm) }
+                                    else
+                                    {
+                                        for k=0;k<@count(@@(m,"&installable"))
+                                        {
+                                            fi=trim(list.str(@@(m,"&installable"),k))
+                                            if fi!="" { do list.add(np,fi) }
+                                        }
+                                    }
+                                }
+                                else { do list.add(np,itm) }
+                            }
+                            else { do list.add(np,itm) }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                do list.add(np,p)
+            }
+        }
+
+        return np
+    }
+
     @install_program="install.dkl"
     @install_folder="_install"
 
+    @source_url="https://install-v12.induxsoft.net/"
+    @cat_file="catalog.json"
+
     ref args=commandline("=")
+    
     if trim(@@(args,"$db"))=="" { do rise_error(0,"Falta el argumento 'db'.")}
     if trim(@@(args,"$packs"))=="" { do rise_error(0,"Falta el argumento 'packs'.")}
     ref packs=split(@@(args,"$packs"),",")
 
+    if trim(@@(args,"$from"))!="" { @source_url=trim(@@(args,"$from")) }
+    if trim(@@(args,"$cat"))!="" { @cat_file=trim(@@(args,"$cat")) }
+
     if trim(@@(args,"$prg"))!="" { @install_program=trim(@@(args,"$prg"))}
     if trim(@@(args,"$fld"))!="" { @install_folder=trim(@@(args,"$fld"))}
+
+    ref packs= analisis_catalogo(packs)
 
     ref lista_programas=list.create()
 

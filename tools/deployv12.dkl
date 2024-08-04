@@ -9,29 +9,28 @@ program "Deployment"
     ref @zip_assembly = _import_library("System.IO.Compression.ZipFile.dll")
     do _map_function(@zip_assembly, "System.IO.Compression.ZipFile", "ExtractToDirectory", "unzip","System.String, System.String, System.Boolean","void") 
 
-    print_error::err
+    print_help::err
     {
         do print("")
-        do print("-  ERROR -")
         do print(err)
         do print("------------------------------------------------------------")
         do print("")
         do print("- USO DE LA HERRAMIENTA -")
-        do print('./dkl deployv12 "packs:paquete1,...paqueteN"')
+        do print('./dkl deployv12 "packs=paquete1,...paqueteN"')
         do print("Donde:")
         do print("\t paquete1...paqueteN=Son nombres de paquetes a desplegar")
         do print("")
         do print('* Use comillas dobles " para encerrar los argumentos *')
         do print("")
         do print("Ejemplo:")
-        do print('\t./dkl deployv12 "packs:core, cxp, cxc, inventario"')
+        do print('\t./dkl deployv12 "packs=core, cxp, cxc, inventario"')
         do print("")
         do print("Opcionalmente puede indicar también los argumentos:")
-        do print("\tfrom:<url_de_repositorio>/ (Siempre termine la url con /)")
-        do print("\tcat:<nombre del archivo de catálogo>")
+        do print("\tfrom=<url_de_repositorio>/ (Siempre termine la url con /)")
+        do print("\tcat=<nombre del archivo de catálogo>")
         do print("")
         do print("Ejemplo:")
-        do print('\t./dkl deployv12 "packs:core, cxp, cxc, inventario" "from:https://install-v12.induxsoft.net/" "cat:catalog.json"')
+        do print('\t./dkl deployv12 "packs=core, cxp, cxc, inventario" "from=https://install-v12.induxsoft.net/" "cat=catalog.json"')
         do print("------------------------------------------------------------")
     }
 
@@ -85,20 +84,73 @@ program "Deployment"
        
     }
 
+    merge_args::
+    {
+        ref a=commandline("=")
+        ref b=commandline(":")
+
+        if isnull(b) { return a }
+
+        ref x=list.create_from_fields(b)
+        for i=0;i<@count(x)
+        {
+            a<list.str(x,i)>:@@(b,"$"+list.str(x,i))
+        }
+
+        return a
+    }
+
     @source_url="https://install-v12.induxsoft.net/"
     @cat_file="catalog.json"
     @file_ext=".zip"
+    @from_local=@false
 
-    ref args=commandline(":")
-    if trim(@@(args,"$packs"))=="" { do rise_error(0,"Falta el argumento 'packs' con la lista de paquetes a descargar.")}
+    ref args=merge_args()
+
+    if field.exist(args,"help") || field.exist(args,"-h") || field.exist(args,"?") || field.exist(args,"-?")
+    { 
+        do print_help("")
+        return
+    }
+
+    if trim(@@(args,"$packs"))=="" 
+    { 
+        do print_help("ERROR: Falta el argumento 'packs' con la lista de paquetes a descargar.")
+        return
+    }
+
     ref packs=split(@@(args,"$packs"),",")
 
     if trim(@@(args,"$from"))!="" { @source_url=trim(@@(args,"$from")) }
     if trim(@@(args,"$cat"))!="" { @cat_file=trim(@@(args,"$cat")) }
 
-    //Descargar el archivo de catálogo
-    ref catalog=from.json(http.get(@source_url+@cat_file))
+    @from_local=field.exist(args,"local")
+    md5_repo="_deployed/"+md5(@source_url)
 
+    if @from_local
+    {
+        if not(file.exists(path.concat(md5_repo,@cat_file)))
+        {
+            do print("Advertencia: No hay un catálogo disponible localmente, se intentará la descarga.")
+            @from_local=@false
+        }
+        else
+        {
+            ref catalog=from.json(file.rtext(path.concat(md5_repo,@cat_file)))
+        }
+    }
+    if not(@from_local)
+    {
+        //Descargar el archivo de catálogo
+        ref catalog=from.json(http.get(@source_url+@cat_file))
+
+        //Guardar el catálogo 
+        
+        do dir.ensure(md5_repo)
+        do file.wtext(path.concat(md5_repo,@cat_file),to.json(catalog))
+        do file.wtext(path.concat(md5_repo,"source-url.txt"),@source_url)
+    }
+    
     //Crear lista de descargas
     ref lista=list.create()
     
@@ -108,18 +160,31 @@ program "Deployment"
     for i=0;i<@count(lista)
     {
         url=list.str(lista,i)
-        temp_file=uuid()+".zip"
-        do print ("Descargando: "+file.justname(url)+"...")
-        do http.download(url,temp_file)
-        do print("Descargado.")
-        do print("Descomprimiendo...")
+        temp_file=path.concat(md5_repo,file.name(list.str(lista,i)))
+        
+        if not(@from_local) || not(file.exists(temp_file))
+        {
+            if file.exists(temp_file){ do file.delete(temp_file) }
+            do print ("Descargando: "+file.justname(url)+"...")
+            do http.download(url,temp_file)
+            do print("Descargado.")
+        }
+        do print("Descomprimiendo "+file.name(temp_file)+"...")
+        if file.exists("pack.manifest") { do file.delete("pack.manifest") }
         do unzip(temp_file,"./",@true)
+        if file.exists("pack.manifest") 
+        {
+            do file.copy("pack.manifest",path.concat(md5_repo,file.justname(list.str(lista,i)))+".manifest")
+            do file.delete("pack.manifest")
+        }
+        else { do print("Paquete sin manifiesto.") }
+
         do print("Desplegado.")
-        do file.delete(temp_file)
+        //do file.delete(temp_file)
         do print("")
     }
     exception
     {
-        do print_error(last_error())
+        do print(last_error())
     }
 }
