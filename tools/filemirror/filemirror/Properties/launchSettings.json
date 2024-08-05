@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "filemirror": {
+      "commandName": "Project",
+      "commandLineArgs": "C:\\Users\\desamaster\\Documents\\GitHub\\v12\\tools\\filemirror\\filemirror\\archivos\\vars.txt C:\\Users\\desamaster\\Documents\\GitHub\\v12\\tools\\filemirror\\filemirror\\archivos\\directorios.txt"
+    }
+  }
+}
