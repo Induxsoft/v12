@@ -1,2 +1,0 @@
-$repo > C:\Users\desamaster\Documents\GitHub
-$server > c:\dkl
