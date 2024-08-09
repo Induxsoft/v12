@@ -51,12 +51,14 @@ module "list.dk"
         @"jscurrentcontext": "getCurrentContext"
     }
 
-    #$ div(class="container-fluid p-0")
+    #$
+    div(id="view" class="container-fluid") // Encapsula a la vista en su totalidad, todo lo que hay antes o después no se considera 
     {
-        #! do uie.printV12FormBar(nav_config)
-
-        #$ div(id="work_area" class="container-section mt-1 p-2 pt-0")
+        div(id="top_area")
         {
+            //Filtros y acciones
+            #! do uie.printV12FormBar(nav_config)
+            #$
             p{$"#<@('$error/message')>"}
 
             form(action="./" method="GET" id="form_search" class="no-print my-1 d-flex py-1")
@@ -71,18 +73,27 @@ module "list.dk"
                     "class"="w-100"
                 ){$""}
             }
-            #! do uie.dbeditable(table_definition, "#<table_id>")
         }
-
-		#$
-		script(type="text/javascript")
-		{$'
-			function getCurrentContext()
-			{
-				const table = document.getElementById("#<table_id>");
-				const id = (table?.DataArray[table.CurrentRowIndex()]?.sys_pk ?? "");
-    			return { item_id:id, context: {} }
-			}
-		'}
+        div(id="work_area" class="mt-1 p-2 pt-0")
+        {
+            #! 
+            do uie.dbeditable(table_definition, "#<table_id>")
+            #$
+            script(type="text/javascript")
+            {$'
+                function getCurrentContext()
+                {
+                    const table = document.getElementById("#<table_id>");
+                    const id = (table?.DataArray[table.CurrentRowIndex()]?.sys_pk ?? "");
+                    return { item_id:id, context: {} }
+                }
+            '}
+            /////////////////////////////////////////////////////////////////////
+            div(id="_custom_area"){ script{$"#<@@(@crud_context,'script')>"} }
+        }
+        div(id="bottom_area")
+        {
+            //Resúmenes y datos al pie
+        }
     }
 }
