@@ -1,5 +1,11 @@
 document.addEventListener("DOMContentLoaded", () => {
     setTimeout(()=>{v12_on_resize();},200);
+
+    const inputs = document.querySelectorAll('form [required]');
+    inputs.forEach(input => {
+        const label = document.querySelector(`label[for="${input.id}"]`);
+        if (label) label.style.fontWeight = 'bold';
+    });
 });
 
 window.addEventListener("resize", function(event) {
