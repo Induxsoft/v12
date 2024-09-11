@@ -9,18 +9,16 @@ program "createpack"
     @pack_template="pack"
     @sites_path="./"
 
-    text @schema_ddm
-    {
-        $'
+text @schema_ddm
+{
+    $'
 #include "ddm.dkh"
 model "erp.cxc"
 {
     #include "induxsoft.abstracts.ddm"
-
-
 }
-        '
-    }
+    '
+}
 
     copydir::source,dest
     {
@@ -67,6 +65,9 @@ model "erp.cxc"
     {
         code=replace(code,'@base_path = ""','@base_path = "'+tolower(packid)+'"')
         code=replace(code,"@packid",tolower(packid))
+        
+        string = '@path_root = ""\r\n\r\n\tif @@(@http_context,"$session/user/ids") == "" {\r\n\t\tif file.exists("webshell/lost.dk") { include "webshell/lost.dk" }\r\n\t\telse { @http_context<"response/headers/location"> : "/" }\r\n\t\treturn\r\n\t}'
+        code=replace(code,'@path_root=""',string)
 
         return code
     }
