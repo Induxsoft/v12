@@ -22,3 +22,52 @@ function v12_on_resize()
     let h=work_area.offsetHeight-overflow-const_h;
     work_area.style.height=h+"px";
 }
+
+function getPrintableHTML()
+{
+    const container = document.createElement("div");
+    container.innerHTML = `
+    <!-- link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous" -->
+    <style>
+        table { width:100%; margin-bottom:1rem; caption-side:bottom; border-collapse:collapse; color:#212529; border-color:#dee2e6; }
+        table>:not(caption)>* { border-width: 1px 0; }
+        table>:not(caption)>*>* { border-width: 0 1px; padding: .25rem .25rem; }
+        tr th { background-color:#DCDCDC; text-align:center; font-size:.9rem; font-weight:500; outline:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; -o-text-overflow:ellipsis; }
+        tr th > .sizable-border { height:unset!important; }
+        tr td { background-color:#FFFFFF; color:#000000; font-size:.8rem; }
+        
+        /* .bg-light-gray { background-color: #DCDCDC !important; }
+        .bg-yellow { background-color: #ffe484 !important; }
+        .fw-500 { font-weight: 500 !important; } */
+    </style>
+    `;
+
+    document.querySelectorAll(".printable-element").forEach(el => {
+        if (el.tagName==="EDIT-TABLE") container.appendChild(el._shadow.getElementById(el.id).cloneNode(true));
+        else container.appendChild(el.cloneNode(true));
+    });
+    // Array.prototype.forEach.call(container.querySelectorAll("*"), function(element){
+    //     element.removeAttribute('style');
+    // });
+    return container;
+}
+
+function v12PrintHTML()
+{
+    let data = { doc: getPrintableHTML().outerHTML.replaceAll("show-on-print","") }
+    
+    const onSuccess = (data) => {
+        if (data.message) {
+            alert(data.message);
+            return
+        }
+        
+        window.open(data.url,"_blank");
+    }
+
+    const onFailure = (error) => {
+        alert(error.message ?? JSON.stringify(error))
+    }
+
+    InduxsoftCrudlModel.InvokeService("/webshell/_services/save-view.dkl",data,onSuccess,onFailure,"POST",false);
+}
