@@ -31,11 +31,12 @@ module
 
         tableLeyend = @@(table_definition, "$table_footer")
 
-        #$ div
+        #$
+        div(style="height:100%;")
         {
-            div(style="overflow-y:auto;max-height: #<tableHeight>;" id="list_table_container")
+            div(style="overflow-y:auto; max-height:#<tableHeight>;" id="list_table_container")
             {
-                "edit-table"(style="width: 100%;" "hidde-selector"="true" data='#<to.json(datatable)>' id="#<table_id>" "cards-responsive"="true")
+                "edit-table"(style="width:100%;" "hidde-selector"="true" data='#<to.json(datatable)>' id="#<table_id>" "cards-responsive"="true")
                 {
                     "edit-thead"
                     {
@@ -96,6 +97,8 @@ module
             script(type="text/javascript")
             {$'
                 document.addEventListener("DOMContentLoaded", ()=> {
+                    // const work_area = document.getElementById("work_area");
+                    // const list_cont = document.getElementById("list_table_container");
                     const table = document.getElementById("#<table_id>");
                     if (table)
                     {
