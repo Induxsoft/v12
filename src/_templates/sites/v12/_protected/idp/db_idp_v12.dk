@@ -10,7 +10,7 @@ module "Proveedor de Identidades [Id Provider] desde base de datos"
     codeblock
     {
         host_name = @@(@http_context,"$request/headers/HTTP_HOST")
-        
+        if trim(host_name)==""{host_name=@@(@http_context,"$request/headers/SERVER_NAME")}
         cfg_name = host_name + ".json"
         cfg_file = path.concat("_config",cfg_name)
         if file.exists(cfg_file)
