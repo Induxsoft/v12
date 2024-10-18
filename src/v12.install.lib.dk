@@ -24,10 +24,9 @@ catalogs_file = path.concat(path_app_info,"sys_app_catalog.csv")
 shortcuts_file = path.concat(path_app_info,"sys_app_shortcut.csv")
 item_type_file = path.concat(path_app_info,"sys_app_item_type.csv")
 item_action_file = path.concat(path_app_info,"sys_app_item_action.csv")
+sitem_file = path.concat(path_app_info,"sitem.csv")
 vars_file = path.concat(path_app_info,"vars.json")
 events_file = path.concat(path_app_info,"sys_event_handlers.csv")
-// Archivo de permisos
-sitem_file = path.concat(path_initial_data,"sitem.csv")
 
 pack_name = file.name(dir.name(path_install))
 model_name = pack_name + ".ddm"
@@ -187,6 +186,7 @@ if file.exists(events_file)
 //#endregion
 
 //#region Importar privilegios
+if not(file.exists(sitem_file)) { sitem_file = path.concat(path_initial_data,"sitem.csv") }
 if file.exists(sitem_file)
 {
     do print("\nIMPORTANDO PRIVILEGIOS")
