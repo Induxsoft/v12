@@ -3,6 +3,7 @@
 #include "dbr.security.dkl"
 #include "dbr.events.dkl"
 #include "dbr.apps.dkl"
+#include "dbr.apps.dba.dkl"
 
 #!
 // PREPARACIÓN DE VARIABLES
@@ -14,6 +15,7 @@ path_ddm = path.concat(path_install,"ddm")
 path_initial_data = path.concat(path_install,"initial_data")
 path_app_info = path.concat(path_install,"app_info")
 path_tasks = path.concat(path_install,"tasks")
+path_reports = path.concat(path_install,"reports")
 
 qname = trim(@@(args,"$db"))
 if qname == "" { qname = trim(@@(args,"$bd")) }
@@ -24,9 +26,10 @@ catalogs_file = path.concat(path_app_info,"sys_app_catalog.csv")
 shortcuts_file = path.concat(path_app_info,"sys_app_shortcut.csv")
 item_type_file = path.concat(path_app_info,"sys_app_item_type.csv")
 item_action_file = path.concat(path_app_info,"sys_app_item_action.csv")
+events_file = path.concat(path_app_info,"sys_event_handlers.csv")
 sitem_file = path.concat(path_app_info,"sitem.csv")
 vars_file = path.concat(path_app_info,"vars.json")
-events_file = path.concat(path_app_info,"sys_event_handlers.csv")
+reports_file = path.concat(path_app_info,"reports.json")
 
 pack_name = file.name(dir.name(path_install))
 model_name = pack_name + ".ddm"
@@ -153,7 +156,7 @@ if file.exists(vars_file)
     ref categories = from.json(file.rtext(vars_file))
     for i = 0; i < list.count(categories)
     {
-        do print("Categoria:")
+        do print("Categoría:")
         ref cat = list.obj(categories,i)
         do dbr.vars.categories.set(database,@@(cat,"$id"),@@(cat,"$caption"),@@(cat,"$help"),@@(cat,"$parent"))
         
@@ -212,6 +215,36 @@ if list.count(@permissions_to_import) > 0
 
     admins_groupid = dbr.security.admins(database)
     do dbr.security.assign(database,admins_groupid,@permissions_to_import)
+}
+//#endregion
+
+//#region Registrar Reportes
+ref reports_files = list.create()
+if dir.exists(path_reports){ ref reports_files:list.files(path_reports,"*.json") }
+if file.exists(reports_file){ do list.add(reports_files,reports_file) }
+
+if list.count(reports_files) > 0 { do print("\nREGISTRANDO CONSULTAS") }
+for i = 0; i < list.count(reports_files)
+{
+    ref reports = from.json(file.rtext(list.str(reports_files,i)))
+    for j = 0; j < list.count(reports)
+    {
+        ref category = list.obj(reports,j)
+        pk_cat = dbr.apps.dba.setquerycat(database,@@(category,"$id"),@@(category,"$title"))
+        
+        do print("Categoría: "+@@(category,"$title"))
+        do print(" + Consultas:")
+        
+        ref queries = field.obj(category,"queries")
+        do field.remove(category,"queries")
+        for k = 0; k < list.count(queries)
+        {
+            ref query = list.obj(queries,k)
+            query<"cat"> : pk_cat
+            do dbr.apps.dba.setquery(database,query)
+            do print("  - "+@@(query,"$title"))
+        }
+    }
 }
 //#endregion
 
