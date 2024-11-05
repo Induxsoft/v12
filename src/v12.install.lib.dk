@@ -4,6 +4,7 @@
 #include "dbr.events.dkl"
 #include "dbr.apps.dkl"
 #include "dbr.apps.dba.dkl"
+#include "webshell.dkh"
 
 #!
 // PREPARACIÓN DE VARIABLES
@@ -30,6 +31,7 @@ events_file = path.concat(path_app_info,"sys_event_handlers.csv")
 sitem_file = path.concat(path_app_info,"sitem.csv")
 vars_file = path.concat(path_app_info,"vars.json")
 reports_file = path.concat(path_app_info,"reports.json")
+detlogs_file = path.concat(path_app_info,"detlogs.json")
 
 pack_name = file.name(dir.name(path_install))
 model_name = pack_name + ".ddm"
@@ -215,6 +217,17 @@ if list.count(@permissions_to_import) > 0
 
     admins_groupid = dbr.security.admins(database)
     do dbr.security.assign(database,admins_groupid,@permissions_to_import)
+}
+//#endregion
+
+//#region Bitácoras por DET
+if file.exists(detlogs_file)
+{
+    do print("\nREGISTRANDO BITÁCORAS POR DET")
+
+    ref detlogs = from.json(file.rtext(detlogs_file))
+    ref @DB = database
+    do webshell.detlog.register(detlogs)
 }
 //#endregion
 
