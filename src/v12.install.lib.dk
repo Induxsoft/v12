@@ -27,6 +27,7 @@ catalogs_file = path.concat(path_app_info,"sys_app_catalog.csv")
 shortcuts_file = path.concat(path_app_info,"sys_app_shortcut.csv")
 item_type_file = path.concat(path_app_info,"sys_app_item_type.csv")
 item_action_file = path.concat(path_app_info,"sys_app_item_action.csv")
+det_finders_file = path.concat(path_app_info,"sys_app_item_type_finder.csv")
 events_file = path.concat(path_app_info,"sys_event_handlers.csv")
 sitem_file = path.concat(path_app_info,"sitem.csv")
 vars_file = path.concat(path_app_info,"vars.json")
@@ -147,6 +148,16 @@ if file.exists(item_action_file)
 
     ref actionsData = CsvRead(item_action_file,"")
     do dbr.apps.itemaction.import(database,actionsData)
+}
+//#endregion
+
+//#region DET finders
+if file.exists(det_finders_file)
+{
+    do print("\nREGISTRANDO BUSCADORES POR DET")
+
+    ref findersData = CsvRead(det_finders_file,"")
+    do dbr.apps.detfinder.import(database,findersData)
 }
 //#endregion
 
