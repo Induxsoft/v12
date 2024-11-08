@@ -36,7 +36,7 @@ module
         {
             div(style="overflow-y:auto; max-height:#<tableHeight>;" id="list_table_container")
             {
-                "edit-table"(style="width:100%;" "hidde-selector"="true" data='#<to.json(datatable)>' id="#<table_id>" "cards-responsive"="true")
+                "edit-table"(style="width:100%;" "hidde-selector"="true" data='#<to.json(datatable)>' id="#<table_id>" "cards-responsive"="true" "control-styles"="#<@@(table_definition,'$control_styles')>")
                 {
                     "edit-thead"
                     {
@@ -178,6 +178,7 @@ module
         urlexitbtn = field.dstr(config, "urlexit", "javascript:window.history.back();")
         print_mode = field.dnum(config,"print_mode",0)
         main_list = field.dstr(config, "main", "")
+        valid_list = field.dstr(config, "validate", "")
         js_fncname = field.dstr(config, "jscurrentcontext", "")
 
         if not(field.exist(config,"urlexit"))
@@ -191,6 +192,7 @@ module
         btn_back_target = ifstr(urlexitbtn=="/", "_top", "_self")
 
         ref main_buttons = uie.getMainButtons(actlst, replst, main_list)
+        ref validate = split(trim(valid_list),",")
 
         if isnull(m_acts) && trim(main_list) == ""
         {
@@ -279,6 +281,7 @@ module
                 var v12navbar =
                 {
                     mainActions: #<to.json(tmpact)>,
+                    validActions: #<to.json(validate)>,
                     buttonsDisabled: false,
 
                     init()
@@ -316,6 +319,8 @@ module
                                 alert("Se requiere seleccionar un elemento de tipo " + data.itemtype);
                                 return;
                             }
+                            
+                            // if (this.validActions.includes(data.id))
 
                             url = url.replace("@_src_context_item_id", item_id);
                             url = url.replace("@_src_context_encode", context);
