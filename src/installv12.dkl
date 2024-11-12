@@ -41,6 +41,7 @@ program "InstallV12"
 
     @max_deep_recursive=30
     @iterations=0
+    @file_ext=".zip"
 
     generar_lista::&packs,&catalog,&lista
     {
