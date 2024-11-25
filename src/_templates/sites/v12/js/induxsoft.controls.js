@@ -1054,7 +1054,7 @@ class CheckList extends HTMLElement
             this.radioStyle =   this._parseBool(this.getAttribute('radio-style'));
 
             this._containerwc = this._createFullElement('div', { id:'CL_container', class:'bordered d-flex flex-column' });
-            this._headSection = this._createFullElement('div', { id:'CL_headerSection', class:'p-3 d-flex' });
+            this._headSection = this._createFullElement('div', { id:'CL_headerSection', class:'p-3 d-flex',tabindex:"0" });
             this._bodySection = this._createFullElement('div', { id:'CL_bodySection', class:'grow-1' });
             this._footSection = this._createFullElement('div', { id:'CL_footSection'});
 
@@ -1202,7 +1202,8 @@ class CheckList extends HTMLElement
         this._bodySection.innerHTML = ``;
         this._footSection.innerHTML = ``;
         this._footHeader.classList.add('hide-element');
-
+        
+        this._headSection.setAttribute("title",(this.data?.text ?? ''));
         this._titleHeader.classList.toggle('disable-element', !this.canEdit);
         if (this.hideHeader) this._headSection.style.display = "none";
 
@@ -2442,8 +2443,8 @@ class SafeInput extends HTMLElement
                 this._inputSf.select();
             });
             this._inputSf.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter')
-                    this._confirmEdit(contanr);    
+                if (e.key === 'Enter' && this._inputSf.nodeName != "TEXTAREA")
+                    this._confirmEdit(contanr);
             });
             this._btnDone.addEventListener('click', async () => {
                 this._confirmEdit(contanr);
@@ -2556,10 +2557,11 @@ class SafeInput extends HTMLElement
             }
         }
 
-        if (this.getAttribute('placeholder'))
-            input.setAttribute('placeholder', this.getAttribute('placeholder'));
-
-        if (input) input.value = (this.getAttribute('value') ?? '');
+        if (input) {
+            input.value = (this.getAttribute('value')??'');
+            if (this.getAttribute('placeholder')) input.setAttribute('placeholder', this.getAttribute('placeholder'));
+            if (this.hasAttribute('onchange')) input.setAttribute('onchange', this.getAttribute('onchange'));
+        }
 
         if (this._parseBool(this.getAttribute('hidden-input')))
         {

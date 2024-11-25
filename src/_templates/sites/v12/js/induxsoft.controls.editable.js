@@ -224,8 +224,7 @@ class EditTable extends HTMLElement
             
             this._initTreeValues();
 
-            if (this.ShowAsTree)
-                this._printTreeData();
+            if (this.ShowAsTree) this._printTreeData();
 
             this.Initialize(this._table.getAttribute('id'));
             //this._processAtributesColumn();
@@ -236,8 +235,23 @@ class EditTable extends HTMLElement
             // Si no se ha proporcionado el atributo data para el dataArray se genera a partir del contenido de la tabla
             if (this.DataArray.length < 1) this.UpdateData();
             this._current_row = this.CurrentRowIndex();
-            this.setAutoConfirm();
 
+            // Vista de impresión activada.
+            window.addEventListener('beforeprint', () => {
+                this.Columns.forEach(col => {
+                    if ((col?.class??"").includes("hide-on-print") || (col?.class??"").includes("no-print"))
+                        this.hideColumn(col.field, true);
+                });
+            });
+            // Vista de impresión desactivada.
+            window.addEventListener('afterprint', () => {
+                this.Columns.forEach(col => {
+                    if ((col?.class??"").includes("hide-on-print") || (col?.class??"").includes("no-print"))
+                        this.hideColumn(col.field, false);
+                });
+            });
+            
+            this.setAutoConfirm();
             this.checkAndSetRowCards();
         });
     }
@@ -748,6 +762,7 @@ class EditTable extends HTMLElement
         if (this.hasAttribute('max-row-height')) this.maxRowHeight = this.getAttribute('max-row-height');
         if (this.hasAttribute('row-height')) this.rowHeight = this.getAttribute('row-height');
         if (this.hasAttribute('cards-responsive')) this.cardsResponsive = (this.getAttribute('cards-responsive')=='true');
+        if (this.hasAttribute('editable-responsive')) this.editableResponsive = (this.getAttribute('editable-responsive')=='true');
     }
     autoConfirm=false;
     _fireBlur=true;
@@ -774,7 +789,9 @@ class EditTable extends HTMLElement
 
     checkAndSetRowCards()
     {
-        const editable = this.Columns.find(col => col.type.toLowerCase() != 'noeditable')
+        var editable=null;
+        if(!this.editableResponsive) editable = this.Columns.find(col => col.type.toLowerCase() != 'noeditable');
+        
         this._table.classList.toggle('table-cards', (!editable && this.cardsResponsive));
     }
 
@@ -1144,7 +1161,7 @@ class EditTable extends HTMLElement
 
     // ========================= EDITABLE WC FUNCTIONS
 
-    Events = { };
+    Events = {};
     TheadRowIndex = 0;
     AutoAddRow = true;
     AutoDelRow = true;
@@ -1174,7 +1191,7 @@ class EditTable extends HTMLElement
     maxRowHeight = "none";
     rowHeight = "100%";
     cardsResponsive = false;
-    
+    editableResponsive=false;
     CSS = {
         Cell:"EdiTable-Cell",
         RowSelected: "EdiTable-Row-Selected"

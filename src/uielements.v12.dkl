@@ -27,8 +27,11 @@ module
         if trim(table_id) == "" { table_id = cut("table_"+uuid(),12) }
         
         // Previsión de error ortográfico leyed por legend
-        if not(field.exist(table_definition,"table_footer")) { table_definition<"table_footer">:field.dstr(table_definition, "leyend", "Mostrando los primeros # registros ordenados por código")}
+        if not(field.exist(table_definition,"table_footer")) {
+            table_definition<"table_footer">:field.dstr(table_definition, "leyend", "Mostrando los primeros # registros ordenados por código")
+        }
 
+        control_styles = @@(table_definition,'$control_styles')
         tableLeyend = @@(table_definition, "$table_footer")
 
         #$
@@ -36,7 +39,19 @@ module
         {
             div(style="overflow-y:auto; max-height:#<tableHeight>;" id="list_table_container")
             {
-                "edit-table"(style="width:100%;" "hidde-selector"="true" data='#<to.json(datatable)>' id="#<table_id>" "cards-responsive"="true" "control-styles"="#<@@(table_definition,'$control_styles')>")
+                "edit-table"(id="#<table_id>" data='#<to.json(datatable)>' style="width:100%;"
+                "hidde-selector"="true"
+                "cards-responsive"="true"
+                "control-styles"="
+                    ##<table_id> tr th { font-weight:500; }
+                    
+                    @media print {
+                        ##<table_id> { overflow:hidden; }
+                    }
+
+                    #<control_styles>
+                "
+                )
                 {
                     "edit-thead"
                     {
@@ -52,7 +67,7 @@ module
                                 decs = if(@@(opt,"#decs") <= 0, 1, @@(opt,"#decs"))
                                 prefix = @@(opt,"$prefix")
                                 sufix = @@(opt,"$sufix")
-                                class = ifstr(parse.bool(@@(opt,"no-print")), "no-print", "")
+                                class = trim(@@(opt,"$class") +" "+ ifstr(parse.bool(@@(opt,"no-print")), "no-print", ""))
                                 minwidth = ifstr(field.exist(opt,"min-width"), @@(opt,"$min-width"), @@(opt,"$minwidth"))
                                 width = @@(opt,"$width")
                                 maxwidth = ifstr(field.exist(opt,"max-width"), @@(opt,"$max-width"), @@(opt,"$maxwidth"))
@@ -60,7 +75,6 @@ module
                                 template = @@(opt,'$template') // Establecer contenido de la columna sin tomar de la lista de objetos.
                                 
                                 // Definición de columnas
-                                
                                 #$
                                 "edit-th"(
                                     type="NoEditable"
@@ -91,7 +105,7 @@ module
                 #$ div(class="text-center" id="msg_#<table_id>") { h6(style="background-color: #F5F5F5; padding: 10rem 0;"){"#<message>"} }
             }
             #! else {
-                #$ small(class="text-secondary" id="#<table_id>_leyend"){$"#<replace(tableLeyend,'#',lenght)>"}
+                #$ small(class="text-secondary hide-on-print" id="#<table_id>_leyend"){$"#<replace(tableLeyend,'#',lenght)>"}
             }
 
             script(type="text/javascript")
