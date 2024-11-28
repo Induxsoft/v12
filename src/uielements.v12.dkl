@@ -26,7 +26,7 @@ module
 
         if trim(table_id) == "" { table_id = cut("table_"+uuid(),12) }
         
-        // Previsión de error ortográfico leyed por legend
+        // Previsión de error ortográfico leyend por legend
         if not(field.exist(table_definition,"table_footer")) {
             table_definition<"table_footer">:field.dstr(table_definition, "leyend", "Mostrando los primeros # registros ordenados por código")
         }
@@ -43,6 +43,7 @@ module
                 "hidde-selector"="true"
                 "cards-responsive"="true"
                 "control-styles"="
+                    div:has(table##<table_id>) { overflow:revert !important; }
                     ##<table_id> tr th { font-weight:500; }
                     
                     @media print {
@@ -101,8 +102,7 @@ module
             #!
             lenght = list.count(datatable)
             if lenght <= 0 {
-                message = "Sin resultados"
-                #$ div(class="text-center" id="msg_#<table_id>") { h6(style="background-color: #F5F5F5; padding: 10rem 0;"){"#<message>"} }
+                #$ div(class="text-center" id="msg_#<table_id>") { h6(style="background-color:#F5F5F5; padding: 10rem 0;"){"Sin resultados"} }
             }
             #! else {
                 #$ small(class="text-secondary hide-on-print" id="#<table_id>_leyend"){$"#<replace(tableLeyend,'#',lenght)>"}
@@ -114,6 +114,7 @@ module
                     // const work_area = document.getElementById("work_area");
                     // const list_cont = document.getElementById("list_table_container");
                     const table = document.getElementById("#<table_id>");
+                    
                     if (table)
                     {
                         table.AutoAddRow = false;
