@@ -20,15 +20,29 @@ module
 
     function uie.dbeditable(&table_definition, table_id)
     {
+        if trim(table_id) == "" { table_id = cut("table_"+uuid(),12) }
+
         ref datatable = @@(table_definition, "&datatable")
         ref columns = @@(table_definition, "&columns")
+        ref treeopt = @@(table_definition,"&tree-opt")
+        
         tableHeight = field.dstr(table_definition, "tableheight", "75vh")
+        show_tree = parse.bool(@@(table_definition,"$show-tree"))
+        tree_opt = ''
+        expanded = @false
 
-        if trim(table_id) == "" { table_id = cut("table_"+uuid(),12) }
+        if show_tree {
+            keyfield = field.dstr(treeopt,"key","sys_pk")
+            parentkey = field.dstr(treeopt,"parentkey","parent")
+            childsfield = field.dstr(treeopt,"childs-field","__items")
+            expanded = parse.bool(@@(treeopt,"$expanded"))
+            
+            tree_opt = ftext('show-tree="true" key="#<keyfield>" parentkey="#<parentkey>" childs-field="#<childsfield>" can-move-row="false"')
+        }
         
         // Previsión de error ortográfico leyend por legend
         if not(field.exist(table_definition,"table_footer")) {
-            table_definition<"table_footer">:field.dstr(table_definition, "leyend", "Mostrando los primeros # registros ordenados por código")
+            table_definition<"table_footer"> : field.dstr(table_definition,"leyend","Mostrando los primeros # registros ordenados por código")
         }
 
         control_styles = @@(table_definition,'$control_styles')
@@ -39,9 +53,8 @@ module
         {
             div(style="overflow-y:auto; max-height:#<tableHeight>;" id="list_table_container")
             {
-                "edit-table"(id="#<table_id>" data='#<to.json(datatable)>' style="width:100%;"
-                "hidde-selector"="true"
-                "cards-responsive"="true"
+                "edit-table"(id="#<table_id>" data='#<to.json(datatable)>' "#<tree_opt>"=""
+                "hidde-selector"="true" "cards-responsive"="true" style="width:100%;"
                 "control-styles"="
                     div:has(table##<table_id>) { overflow:revert !important; }
                     ##<table_id> tr th { font-weight:500; }
@@ -120,6 +133,13 @@ module
                         table.AutoAddRow = false;
                         table.AutoDelRow = false;
                         table.EverMove = false;
+                        
+                        if (#<show_tree>) {
+                            table.removeAttribute("data");
+                            table.DataArray = #<to.json(datatable)>;
+                            table._expandOnStart = #<expanded>;
+                            table._printTreeData();
+                        }
 
                         table.Events[table.EdiTable.Const.Events.OnSort] = (e) =>
                         {
