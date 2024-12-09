@@ -189,12 +189,13 @@ module
         }
     }
 
-    #! function uie.printV12FormBar(&config)
+    #!
+    function uie.printV12FormBar(&config)
     {
         // config
         // {
         //      title: "Mi título",     -> título de la vista
-        //      hidden: { print:true }, -> ocultar botón[print, refresh, exit, report, actions] (def: false)
+        //      hidden: { print:true }, -> ocultar botón[print, refresh, exit, report, actions, send] (def: false)
         //      buttons: point_func,    -> puntero a una función que pinta botones (acciones principales)
         //      urlexit: "../",         -> url del botón salir (def: "/")
         //      print_mode: 0|1         -> modo de impresión (def: 0)
@@ -224,6 +225,7 @@ module
 
         btn_cls = "btn btn-sm border-secondary induxsoft-corners btn-main-action no-print"
         fn_print = ifstr(print_mode==1, "v12PrintHTML()", "window.print()")
+        fn_send = "top.WebShell.Notif.Send()"
         btn_back_target = ifstr(urlexitbtn=="/", "_top", "_self")
 
         ref main_buttons = uie.getMainButtons(actlst, replst, main_list)
@@ -293,6 +295,9 @@ module
                                 #! if not(parse.bool(field.dnum(hidden,"report",0))) && list.count(replst) > 0 {
                                     #$ li{ button(type="button" class="#<btn_cls> list-action" title="Reporte" list="ik_list_reports"){$"#<@ICON_REPORT>"} }
                                 }
+                                #! if not(parse.bool(field.dnum(hidden,"send",0))) {
+                                    #$ li{ button(type="button" class="#<btn_cls>" title="Enviar" onclick="#<fn_send>"){$"#<@ICON_SEND>"} }
+                                }
                                 #! if not(parse.bool(field.dnum(hidden,"print",0))) {
                                     #$ li{ button(type="button" class="#<btn_cls>" title="Imprimir" onclick="#<fn_print>"){$"#<@ICON_PRINTER>"} }
                                 }
@@ -312,7 +317,8 @@ module
             }
 
             #$
-            script{$'
+            script(type="text/javascript")
+            {$'
                 var v12navbar =
                 {
                     mainActions: #<to.json(tmpact)>,
@@ -329,6 +335,8 @@ module
                             });
                             if (list) list.change_event = (data) => { v12navbar.selectAction(data); }
                         });
+
+                        top.notiman._params = #<to.json(@("&parameters"))>;
                     },
                     clickMainAction(id,def_href)
                     {
@@ -530,7 +538,8 @@ module
     }
 
     // =============== ICONS
-    #! text @ICON_ARROW_CLOCKWISE
+    #!
+    text @ICON_ARROW_CLOCKWISE
     {$'
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16">
             <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2z"/>
@@ -563,6 +572,12 @@ module
             <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/>
         </svg>
     '}
+    text @ICON_SEND
+    {$'
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-send" viewBox="0 0 16 16">
+            <path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576zm6.787-8.201L1.591 6.602l4.339 2.76z"/>
+        </svg>
+    '}
     text @ICON_ACTIONS
     {$'
         <svg xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="16" height="16" viewBox="0 0 4.2333332 4.2333335" version="1.1" id="svg2430" inkscape:version="1.0.2-2 (e86c870879, 2021-01-15)" sodipodi:docname="actions_button.svg">
@@ -587,6 +602,7 @@ module
             </g>
         </svg>
     '}
+
     text @ICON_X_LG_ENCODED{ $"%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' class='bi bi-x-lg' viewBox='0 0 16 16'%3E%3Cpath d='M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z'/%3E%3C/svg%3E" }
     text @ICON_CHEVRON_LEFT_ENCODED{ $"%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' class='bi bi-chevron-left' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0'/%3E%3C/svg%3E" }
 }
