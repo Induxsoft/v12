@@ -89,6 +89,7 @@ module ""
             <script src="/js/induxsoft.crudl.model.js"></script>
             <script src="/js/induxsoft.math.js"></script>
             <script src="/js/induxsoft.number.fields.js"></script>
+            <script src="/js/lib.js"></script>
 
             <!-- CSS -->
             <style>
