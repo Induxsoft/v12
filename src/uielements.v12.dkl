@@ -388,7 +388,7 @@ module
                             cur_url = InduxsoftCrudlModel.UrlAddParameter(cur_url,"_from_url_e",eurl.value);
                         }
 
-                        window.location.href = cur_url;
+                        window.location.href = cur_url.replace("#","");
                     },
                     toggleButtonInteraction(disable)
                     {
