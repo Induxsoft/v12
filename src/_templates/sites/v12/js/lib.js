@@ -105,5 +105,20 @@ var tools =
         if (!bsModal) return new bootstrap.Modal(modalElement);
 
         return bsModal;
+    },
+    V12FormBarDisableControls(disable,form=null)
+    {
+        const v12FormBar = document.getElementById("v12FormBar_content");
+        if (v12FormBar) v12FormBar.querySelectorAll("button,a").forEach(v12btn => 
+        {
+            v12btn.style.pointerEvents = (disable) ? "none" : "";
+            v12btn.style.backgroundColor = (disable) ? "#e9ecef" : "";
+            v12btn.style.opacity = (disable) ? "1" : "";
+        });
+        
+        if(form)form.querySelectorAll("button").forEach(frmbtn => 
+        {
+            frmbtn.disabled = disable;
+        });
     }
 }
