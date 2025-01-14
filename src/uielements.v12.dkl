@@ -202,17 +202,19 @@ module
         //      actions: [{}, ...],     -> lista de objetos 'acciones'
         //      reports: [{}, ...],     -> lista de objetos 'reportes'
         //      main: ["act1", ....],   -> lista de IDs de acciones y reportes que se listarán
+        //      parameters: {id:{k:v,...}}  -> Array de parámetros que se asignaran a las url de la acciones.
         //      jscurrentcontext: "fn", -> nombre de la función JS que retorna un objeto: { item_id:1, context:{} }
         // }
         
         ref hidden = ifnull(@@(config, "&hidden"), record.create())
         ref actlst = ifnull(@@(config, "&actions"), list.create())
         ref replst = ifnull(@@(config, "&reports"), list.create())
+        ref parameters = ifnull(@@(config, "&parameters"), record.create())
         ref m_acts = @@(config, "&buttons")
         ref tmpact = from.json(to.json(actlst))
         title_view = field.dstr(config, "title", "")
         urlexitbtn = field.dstr(config, "urlexit", "javascript:window.history.back();")
-        print_mode = field.dnum(config,"print_mode",0)
+        print_mode = field.dnum(config, "print_mode", 0)
         main_list = field.dstr(config, "main", "")
         valid_list = field.dstr(config, "validate", "")
         js_fncname = field.dstr(config, "jscurrentcontext", "")
@@ -280,11 +282,39 @@ module
                             for i = 0; i < list.count(main_buttons)
                             {
                                 ref btn = list.obj(main_buttons, i)
+                                
+                                id = @@(btn,'$id')
+                                href = @@(btn,'$href')
+                                title = @@(btn,'$title')
+                                shorttitle = @@(btn,'$shorttitle')
                                 reqcontext = parse.bool(@@(btn,"$req_context_item_id"))
                                 
-                                if @@(btn,"$shorttitle")=="" { btn<"shorttitle">:cut(@@(btn,"$title"),25)}
+                                if shorttitle=="" { shorttitle = cut(title,25) }
+                                qry = ""
+                                if contains(href,"?")
+                                {
+                                    ref part = split(href,"?")
+                                    href = trim(list.str(part,0))
+                                    qry = trim(list.str(part,1))
+                                }
+                                if field.exist(parameters,id)
+                                {
+                                    if qry != "" { qry = qry + "&" }
+
+                                    ref params = ifnull(@@(parameters,"&"+id),record.create())
+                                    ref keys = list.create_from_fields(params)
+                                    for j = 0; j < list.count(keys)
+                                    {
+                                        k = list.str(keys,j)
+                                        v = field.str(params,k)
+
+                                        qry = qry + k + "=" + v + "&"
+                                    }
+                                    qry = rremove(qry,1)
+                                }
+                                if qry != "" { href = href + "?" + qry }
                                 
-                                #$ li{ a(class="#<btn_cls> v12-context-act-#<reqcontext> list-action" title="#<@@(btn,'$title')>" id="v12_#<@@(btn,'$id')>" href="#" onclick="v12navbar.clickMainAction('#<@@(btn,'$id')>','#<@@(btn,'$href')>')"){$"#<@@(btn,'$shorttitle')>"} }
+                                #$ li{ a(class="#<btn_cls> v12-context-act-#<reqcontext> list-action" title="#<title>" id="v12_#<id>" href="#" onclick="v12navbar.clickMainAction('#<id>','#<href>')"){$"#<shorttitle>"} }
                             }
 
                             div(class="d-flex gap-1")
@@ -323,6 +353,7 @@ module
                 {
                     mainActions: #<to.json(tmpact)>,
                     validActions: #<to.json(validate)>,
+                    btnParameters: #<to.json(parameters)>,
                     buttonsDisabled: false,
 
                     init()
@@ -352,6 +383,7 @@ module
                     {
                         if (data)
                         {
+                            let id = data.id;
                             let url = data.href;
                             let obj = v12navbar.getContext("#<js_fncname>");
                             
@@ -363,7 +395,29 @@ module
                                 return;
                             }
                             
-                            // if (this.validActions.includes(data.id))
+                            // if (this.validActions.includes(data.id)) {}
+
+                            if (this.btnParameters[id])
+                            {
+                                let qry = "";
+                                if (url.includes("?"))
+                                {
+                                    let part = url.split("?");
+                                    url = part[0];
+                                    qry = part[1];
+
+                                    if (qry != "") qry += "&";
+                                }
+                                for (let k in this.btnParameters[id])
+                                {
+                                    qry += k + "=" + this.btnParameters[id][k] + "&"
+                                }
+
+                                if (qry != "") {
+                                    qry = qry.substring(0, qry.length - 1);
+                                    url += "?"+qry;
+                                }
+                            }
 
                             url = url.replace("@_src_context_item_id", item_id);
                             url = url.replace("@_src_context_encode", context);
