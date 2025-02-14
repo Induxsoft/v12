@@ -1,3 +1,5 @@
+#include "ddm.json.dkl"
+#include "ddm.mysql.dkl"
 #include "dbm.dkl"
 #include "dbr.vars.dkl"
 #include "dbr.security.dkl"
