@@ -22,9 +22,28 @@ var tools =
         element.dispatchEvent(event);
     },
 
+    uuid(dashes=false) {
+        function segment() {
+            return Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
+        }
+    
+        const guid = `${segment()}${segment()}${segment()}${segment()}${segment()}${segment()}${segment()}${segment()}`;
+    
+        if (dashes) {
+            return `${guid.substring(0, 8)}-${guid.substring(8, 12)}-${guid.substring(12, 16)}-${guid.substring(16, 20)}-${guid.substring(20)}`;
+        }
+    
+        return guid;
+    },
+
     ParseBool(v) 
     {
-        return ["true","1","yes","y","si","sí","s","ok","on","v","verdadero","verdad","correcto","cierto","positivo","+"].includes(v.toString().trim().toLowerCase());
+        if (typeof v === "number") return (v != 0);
+        if (typeof v === "string") {
+            return ["true","1","yes","y","si","sí","s","ok","on","v","verdadero","verdad","correcto","cierto","positivo","+"].includes(v.toString().trim().toLowerCase());
+        }
+
+        return false
     },
 
     path_concat(p1,p2,...px)
