@@ -38,9 +38,10 @@ var tools =
 
     ParseBool(v) 
     {
+        if (typeof v === "boolean") return v;
         if (typeof v === "number") return (v != 0);
         if (typeof v === "string") {
-            return ["true","1","yes","y","si","sí","s","ok","on","v","verdadero","verdad","correcto","cierto","positivo","+"].includes(v.toString().trim().toLowerCase());
+            return ["true","1","yes","y","si","sí","s","ok","on","v","verdadero","verdad","correcto","cierto","positivo","+"].includes(v.trim().toLowerCase());
         }
 
         return false
@@ -111,17 +112,16 @@ var tools =
 	{
 		this.getBSModal(idmodal).hide();
 	},
-	getBSModal(modalId='')
+	getBSModal(modalId)
     {
         const modalElement = document.getElementById(modalId);
-
-        if(!modalElement)
-        {
+        if (!modalElement) {
             console.log("Elemento no definido");
             return;
         }
-        const bsModal = bootstrap.Modal.getInstance(modalElement);
-        if (!bsModal) return new bootstrap.Modal(modalElement);
+        
+        let bsModal = bootstrap.Modal.getInstance(modalElement);
+        if (!bsModal) bsModal = new bootstrap.Modal(modalElement);
 
         return bsModal;
     },
