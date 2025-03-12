@@ -23,17 +23,10 @@ var tools =
     },
 
     uuid(dashes=false) {
-        function segment() {
-            return Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
-        }
-    
-        const guid = `${segment()}${segment()}${segment()}${segment()}${segment()}${segment()}${segment()}${segment()}`;
-    
-        if (dashes) {
-            return `${guid.substring(0, 8)}-${guid.substring(8, 12)}-${guid.substring(12, 16)}-${guid.substring(16, 20)}-${guid.substring(20)}`;
-        }
-    
-        return guid;
+        let regex = dashes ? [1e7]+-1e3+-4e3+-8e3+-1e11 : [1e7]+1e3+4e3+8e3+1e11;
+        return (regex).replace(/[018]/g, c =>
+            (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+        );
     },
 
     ParseBool(v) 
@@ -102,6 +95,22 @@ var tools =
         const regex = "^\([0-9]+\.?[0-9]{0,"+decimals+"})$";
         const preg = new RegExp(regex);
         return preg.test(number);
+    },
+
+    format:function(number, decPlaces = 2, decSep = ".", thouSep = ",")
+    {
+        if (isNaN(number)) return "NaN";
+
+        const sign = number < 0 ? "-" : "";
+        number = Math.abs(number).toFixed(decPlaces);
+
+        const parts = number.split(".");
+        let integerPart = parts[0];
+        const decimalPart = parts[1] || "";
+        // Agregar separadores de miles
+        integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, thouSep);
+        // Reconstruir el número formateado
+        return sign + integerPart + (decPlaces > 0 ? decSep + decimalPart : "");
     },
 
     showModal:function(idmodal)
