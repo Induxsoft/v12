@@ -195,7 +195,7 @@ module
         // config
         // {
         //      title: "Mi título",     -> título de la vista
-        //      hidden: { print:true }, -> ocultar botón[print, refresh, exit, report, actions, send] (def: false)
+        //      hidden: { print:true }, -> ocultar botón[print, refresh, exit, report, actions, send, copy, csv] (def: false)
         //      buttons: point_func,    -> puntero a una función que pinta botones (acciones principales)
         //      urlexit: "../",         -> url del botón salir (def: "/")
         //      print_mode: 0|1         -> modo de impresión (def: 0)
@@ -323,10 +323,16 @@ module
                                     #$ li{ button(type="button" class="#<btn_cls> list-action" title="Acciones" list="ik_list_actions"){$"#<@ICON_ACTIONS>"} }
                                 }
                                 #! if not(parse.bool(field.dnum(hidden,"report",0))) && list.count(replst) > 0 {
-                                    #$ li{ button(type="button" class="#<btn_cls> list-action" title="Reporte" list="ik_list_reports"){$"#<@ICON_REPORT>"} }
+                                    #$ li{ button(type="button" class="#<btn_cls> list-action" title="Reportes" list="ik_list_reports"){$"#<@ICON_REPORT>"} }
                                 }
                                 #! if not(parse.bool(field.dnum(hidden,"send",0))) {
-                                    #$ li{ button(type="button" class="#<btn_cls>" title="Enviar" onclick="#<fn_send>"){$"#<@ICON_SEND>"} }
+                                    #$ li{ button(type="button" class="#<btn_cls>" title="Notificar" onclick="#<fn_send>"){$"#<@ICON_NOTIFY>"} }
+                                }
+                                #! if not(parse.bool(field.dnum(hidden,"copy",0))) {
+                                    #$ li{ button(type="button" class="#<btn_cls>" title="Copiar datos (csv)" onclick="v12navbar.Exportar('clip');"){$"#<@ICON_COPY>"} }
+                                }
+                                #! if not(parse.bool(field.dnum(hidden,"csv",0))) {
+                                    #$ li{ button(type="button" class="#<btn_cls>" title="Descargar datos (csv)" onclick="v12navbar.Exportar('csv');"){$"#<@ICON_DOWN_CSV>"} }
                                 }
                                 #! if not(parse.bool(field.dnum(hidden,"print",0))) {
                                     #$ li{ button(type="button" class="#<btn_cls>" title="Imprimir" onclick="#<fn_print>"){$"#<@ICON_PRINTER>"} }
@@ -351,6 +357,7 @@ module
             {$'
                 var v12navbar =
                 {
+                    titleView: "#<title_view>",
                     mainActions: #<to.json(tmpact)>,
                     validActions: #<to.json(validate)>,
                     btnParameters: #<to.json(parameters)>,
@@ -368,6 +375,7 @@ module
                         });
 
                         top.notiman._params = #<to.json(@("&parameters"))>;
+                        // document.title ||= this.titleView;
                     },
                     clickMainAction(id,def_href)
                     {
@@ -456,6 +464,89 @@ module
 
                         this.buttonsDisabled = disable;
                     },
+
+                    SaveBlob(blob,filename) {
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        window.URL.revokeObjectURL(url);
+                    },
+                    ExportarCSV(clipboard=false) {
+                        const rows = document.querySelectorAll("table tr");
+                        let csv = [];
+
+                        for(let i = 0; i < rows.length; i++){
+                            let row = [], cols = rows[i].querySelectorAll("td, th");
+                            for(let j = 0; j < cols.length; j++){
+                                let cellValue = cols[j].innerText;
+                                // Reemplazar caracteres que rompan la secuencia csv
+                                if (cellValue.includes(\'"\')) { cellValue = cellValue.replaceAll(\'"\',"&quot;") }
+                                if (cellValue.includes("\'")) { cellValue = cellValue.replaceAll("\'","&apos;") }
+                                if (cellValue.includes(",")) { cellValue = \'"\' + cellValue + \'"\'; }
+                                
+                                row.push(cellValue);
+                            }
+                            csv.push(row.join(","));
+                        }
+                        
+                        const editables = document.querySelectorAll("edit-table");
+                        for(let i = 0; i < editables.length; i++){
+                            const table = editables[i];
+                            let titles = table.Columns.map(o => o.title);
+                            let fields = table.Columns.map(o => o.field);
+
+                            csv.push(titles.join(","));
+                            for(let j = 0; j < table.DataArray.length; j++){
+                                let item = table.DataArray[j];
+                                let row = [];
+                                fields.forEach(f => {
+                                    let cellValue = item[f].toString();
+                                    // Reemplazar caracteres que rompan la secuencia csv
+                                    if (cellValue.includes(\'"\')) { cellValue = cellValue.replaceAll(\'"\',"&quot;") }
+                                    if (cellValue.includes("\'")) { cellValue = cellValue.replaceAll("\'","&apos;") }
+                                    if (cellValue.includes(",")) { cellValue = \'"\' + cellValue + \'"\'; }
+                                    
+                                    row.push(cellValue);
+                                });
+                                csv.push(row.join(","));
+                            }
+                        }
+                        
+                        if (clipboard) {
+                            // Copiar datos csv al portapapeles
+                            navigator.clipboard.writeText(csv.join("\\n"))
+                            .then(() => { console.log("Se copio al portapapeles.") })
+                            .catch(() => { alert("Error al copiar.") });
+                        }
+                        else {
+                            // Descargar archivo .csv
+                            let blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csv.join("\\n")], {type: "text/csv;charset=utf-8;"});
+                            this.SaveBlob(blob,this.titleView+".csv");
+                        }
+                    },
+                    Exportar(tipo) {
+                        if (window.Blob == undefined || window.URL == undefined || window.URL.createObjectURL == undefined) {
+                            alert("Tu navegador no soporta ficheros Blobs");
+                            return;
+                        }
+
+                        switch (tipo) {
+                            case "xlsx":
+                                break;
+                            case "csv":
+                                this.ExportarCSV();
+                                break;
+                            case "txt":
+                                break;
+                            case "clip":
+                                this.ExportarCSV(true);
+                                break;
+                        }
+                    }
                 }
                 document.addEventListener("DOMContentLoaded", () => {
                     v12navbar.init();
@@ -626,10 +717,23 @@ module
             <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/>
         </svg>
     '}
-    text @ICON_SEND
+    text @ICON_NOTIFY
     {$'
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-send" viewBox="0 0 16 16">
             <path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576zm6.787-8.201L1.591 6.602l4.339 2.76z"/>
+        </svg>
+    '}
+    text @ICON_COPY
+    {$'
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-files" viewBox="0 0 16 16">
+            <path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2m0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1M3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>
+        </svg>
+    '}
+    text @ICON_DOWN_CSV
+    {$'
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-filetype-csv" viewBox="0 0 16 16">
+            <path fill-rule="evenodd" d="M14 4.5V14a2 2 0 0 1-2 2h-1v-1h1a1 1 0 0 0 1-1V4.5h-2A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v9H2V2a2 2 0 0 1 2-2h5.5zM3.517 14.841a1.13 1.13 0 0 0 .401.823q.195.162.478.252.284.091.665.091.507 0 .859-.158.354-.158.539-.44.187-.284.187-.656 0-.336-.134-.56a1 1 0 0 0-.375-.357 2 2 0 0 0-.566-.21l-.621-.144a1 1 0 0 1-.404-.176.37.37 0 0 1-.144-.299q0-.234.185-.384.188-.152.512-.152.214 0 .37.068a.6.6 0 0 1 .246.181.56.56 0 0 1 .12.258h.75a1.1 1.1 0 0 0-.2-.566 1.2 1.2 0 0 0-.5-.41 1.8 1.8 0 0 0-.78-.152q-.439 0-.776.15-.337.149-.527.421-.19.273-.19.639 0 .302.122.524.124.223.352.367.228.143.539.213l.618.144q.31.073.463.193a.39.39 0 0 1 .152.326.5.5 0 0 1-.085.29.56.56 0 0 1-.255.193q-.167.07-.413.07-.175 0-.32-.04a.8.8 0 0 1-.248-.115.58.58 0 0 1-.255-.384zM.806 13.693q0-.373.102-.633a.87.87 0 0 1 .302-.399.8.8 0 0 1 .475-.137q.225 0 .398.097a.7.7 0 0 1 .272.26.85.85 0 0 1 .12.381h.765v-.072a1.33 1.33 0 0 0-.466-.964 1.4 1.4 0 0 0-.489-.272 1.8 1.8 0 0 0-.606-.097q-.534 0-.911.223-.375.222-.572.632-.195.41-.196.979v.498q0 .568.193.976.197.407.572.626.375.217.914.217.439 0 .785-.164t.55-.454a1.27 1.27 0 0 0 .226-.674v-.076h-.764a.8.8 0 0 1-.118.363.7.7 0 0 1-.272.25.9.9 0 0 1-.401.087.85.85 0 0 1-.478-.132.83.83 0 0 1-.299-.392 1.7 1.7 0 0 1-.102-.627zm8.239 2.238h-.953l-1.338-3.999h.917l.896 3.138h.038l.888-3.138h.879z"/>
+            <path fill-rule="evenodd" d="M8 4a.5.5 0 0 1 .5.5v5.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 1 1 .708-.708L7.5 10.293V4.5A.5.5 0 0 1 8 4"/>
         </svg>
     '}
     text @ICON_ACTIONS
