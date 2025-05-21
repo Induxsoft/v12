@@ -18,6 +18,26 @@ module
         ##
     }
 
+    function uie.start_crud_context()
+    {
+        @_start_crud_context = @false
+        
+        if not(isset("@crud_context")) { return }
+        if isset("@__context") {
+            if not(isnull(@__context)) { return }
+        }
+
+        do @context.begin(@crud_context)
+        @_start_crud_context = @true
+    }
+
+    function uie.close_crud_context()
+    {
+        if not(isset("@_start_crud_context")) { return }
+        if not(@_start_crud_context) { return }
+        do @context.end()
+    }
+
     function uie.dbeditable(&table_definition, table_id)
     {
         if trim(table_id) == "" { table_id = cut("table_"+uuid(),12) }
@@ -192,6 +212,7 @@ module
     #!
     function uie.printV12FormBar(&config)
     {
+        do uie.start_crud_context()
         // config
         // {
         //      title: "Mi título",     -> título de la vista
@@ -223,6 +244,18 @@ module
         {
             if @("$parameters/_from_url_e")!="" { urlexitbtn=url_dcode(@("$parameters/_from_url_e"))}
             else { urlexitbtn= ifstr(@('$parameters/---from_url')=='', @('$http/request/headers/HTTP_REFERER'), @('$parameters/---from_url')) }
+        }
+        if not(field.exist(config,"hidden"))
+        {
+            op = @("$parameters/_operation")
+            if op != "list"
+            {
+                using hidden
+                {
+                    @"copy":@true
+                    @"csv":@true
+                }
+            }
         }
 
         btn_cls = "btn btn-sm border-secondary induxsoft-corners btn-main-action no-print"
@@ -553,6 +586,8 @@ module
                 });
             '}
         }
+
+        do uie.close_crud_context()
     }
 
     #! function uie.printItemActions(&actions, id, title)
