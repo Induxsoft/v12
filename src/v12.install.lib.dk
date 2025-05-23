@@ -8,6 +8,102 @@
 #include "dbr.apps.dba.dkl"
 #include "webshell.dkh"
 
+//funciones sobre variables de exceptios
+#!
+add_install_model_exception::&db,file
+{
+    //verificar varibale global
+    file_model_install_exception=dbr.vars.get(db,"sys_db_model_install_exception")
+    ref lvar=list.create()
+    if trim(file_model_install_exception)!=""{ref lvar=from.json(file_model_install_exception)}
+    
+    if contains(file_model_install_exception,file){return}
+
+    new cat
+    {
+        @"id":"model_install_exception"
+        @"caption":"Modelo de exception"
+        @"help":"Cat. ejecutar programa de excepciones a la instalación del modelo"
+    }
+    do dbr.vars.categories.set(db,@@(cat,"$id"),@@(cat,"$caption"),@@(cat,"$help"),@@(cat,"$parent"))
+        
+    do print("Variables de modelo de excepción")
+
+    do list.add(lvar,file)
+
+    strlvar=to.json(lvar)
+    new vardata
+    {
+       @"varname": "sys_db_model_install_exception"
+       @"vardefault": strlvar
+       @"varvalue": strlvar
+       @"varcaption": "Programa de excepciones"
+       @"varhelp":"Ejecutar programa de excepciones a la instalación del modelo"
+       @"vartype": "string"
+        member "varinput"
+        { 
+            @"control": "memo" 
+        }
+       
+    }
+    do dbr.vars.define(db,vardata,@@(cat,"$id"))
+
+    exception{do print(last_error())}
+}
+#!
+get_all_install_exceptions::&db
+{
+    file_model_install_exception=dbr.vars.get(db,"sys_db_model_install_exception")
+    return from.json(file_model_install_exception)
+
+    exception{}
+
+    return list.create()
+}
+#!
+Install_Vars_global::&database,vars_file
+{
+    do print("\nESTABLECIENDO VARIABLES DE CONFIGURACIÓN")
+
+    ref categories = from.json(file.rtext(vars_file))
+    for i = 0; i < list.count(categories)
+    {
+        do print("Categoría:")
+        ref cat = list.obj(categories,i)
+
+        if @@(cat,"$id")=="@model_exception"
+        {
+            do print("Variables @model_exception:")
+
+            ref vars = ifnull(@@(cat,"&vars"), list.create())
+            for j = 0; j < list.count(vars) 
+            {
+                do add_install_model_exception(database,trim(list.str(vars,j)))
+            }
+        }
+        else 
+        {
+            do dbr.vars.categories.set(database,@@(cat,"$id"),@@(cat,"$caption"),@@(cat,"$help"),@@(cat,"$parent"))
+        
+            do print("Variables:")
+            ref vars = ifnull(@@(cat,"&vars"), list.create())
+            for j = 0; j < list.count(vars) 
+            {
+                do dbr.vars.define(database, list.obj(vars,j), @@(cat,"$id"))
+            }
+        }
+    }
+}
+#!
+Exist_globalvars::&database
+{
+    do dbr.num(database,"select count(*) from globalvar",@null)
+    do dbr.num(database,"select count(*) from varcategory",@null)
+    
+    return @true
+    exception{}
+    return @false
+}
 #!
 // PREPARACIÓN DE VARIABLES
 ref args = commandline("=")
@@ -76,7 +172,29 @@ if not(dbm.existLogTables(database))
     do dbm.inferModel(qname)
     do print("-- ------------------------- --")
 }
+//verificar si existe global var 
+existglobalvar=Exist_globalvars(database)
+if existglobalvar && file.exists(vars_file)
+{
+    //esto para fines de ejecutar el ultimo archivo agregado a model install
+    do Install_Vars_global(database,vars_file)
+}
+//Verficar si existe la variable sys_db_model_install_exception y la ruta del archivo
+do print("Modelo de exception")
 
+ref file_model_install_exception=get_all_install_exceptions(database)
+for i = 0; i < @count(file_model_install_exception)
+{
+    fmie=list.str(file_model_install_exception,i)
+    if trim(fmie)!="" && file.exists(fmie)
+    {
+        do print("\nEjecutar archivo: "+fmie)
+        do runscript(fmie,"data_model",data_model)
+        exception{do print("Error al ejecutar el archivo: "+fmie+" Error: "+last_error())}
+    }
+}
+
+//finaliza 
 do print("\nINSTALANDO MODELO")
 if not(dbm.installModel(database,model_name,data_model)) { do rise_error(99,"No se instaló el modelo") }
 
@@ -164,23 +282,9 @@ if file.exists(det_finders_file)
 //#endregion
 
 //#region Establecer variables
-if file.exists(vars_file)
+if file.exists(vars_file) && not(existglobalvar)
 {
-    do print("\nESTABLECIENDO VARIABLES DE CONFIGURACIÓN")
-
-    ref categories = from.json(file.rtext(vars_file))
-    for i = 0; i < list.count(categories)
-    {
-        do print("Categoría:")
-        ref cat = list.obj(categories,i)
-        do dbr.vars.categories.set(database,@@(cat,"$id"),@@(cat,"$caption"),@@(cat,"$help"),@@(cat,"$parent"))
-        
-        do print("Variables:")
-        ref vars = ifnull(@@(cat,"&vars"), list.create())
-        for j = 0; j < list.count(vars) {
-            do dbr.vars.define(database, list.obj(vars,j), @@(cat,"$id"))
-        }
-    }
+    do Install_Vars_global(database,vars_file)
 }
 //#endregion
 
