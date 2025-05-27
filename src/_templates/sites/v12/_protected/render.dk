@@ -3,6 +3,7 @@
 module ""
 {
     #include "functions.dkh"
+    #include "dbr.dkh"
 
     v12_view_info::
 	{
@@ -45,6 +46,12 @@ module ""
 		
 		exception { return ""}
 	}
+
+    ref database=@@(@http_context,"&session/idp/database")
+    if not(isnull(database))
+    {
+        if dbr.is_open(database){do dbr.close(database)}
+    }
 
     if not(contains(@@(@http_context,"$request/headers/http_accept"),"html")) { return }
     template='<!DOCTYPE html>
