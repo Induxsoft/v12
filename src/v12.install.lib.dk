@@ -199,6 +199,34 @@ do print("\nINSTALANDO MODELO")
 if not(dbm.installModel(database,model_name,data_model)) { do rise_error(99,"No se instaló el modelo") }
 
 do reconnect(database,qname)
+
+codeblock "Registrar entidades al catálogo de objetos"
+{
+    ref tables = list.create_from_fields(@@(data_model,"&tables"))
+    for i = 0; i < list.count(tables)
+    {
+        tname = list.str(tables,i)
+        if isnull(dbr.rec(database,ftext("select * from sys_catalog where objectname = '#<tname>';"),@null))
+        {
+            new object
+            {
+                @"sys_guid": uuid()
+                @"sys_dtcreated*": dbr.sql("now()")
+                @"sys_timestamp*": dbr.sql("now()")
+                @"sys_recver": 0
+                @"sys_deleted": @false
+                @"objectname": tname
+                @"objectdescription": ""
+                @"objecttype": "TABLE"
+            }
+            do dbr.insert(database,"sys_catalog",object)
+        }
+    }
+    exception
+    {
+        do pop_exception()
+    }
+}
 //#endregion
 
 if not(isset("@permissions_to_import")){ ref @permissions_to_import = list.create() }
