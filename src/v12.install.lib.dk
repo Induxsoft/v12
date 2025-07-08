@@ -131,6 +131,7 @@ sitem_file = path.concat(path_app_info,"sitem.csv")
 vars_file = path.concat(path_app_info,"vars.json")
 reports_file = path.concat(path_app_info,"reports.json")
 detlogs_file = path.concat(path_app_info,"detlogs.json")
+recbindef_file = path.concat(path_app_info,"recbindef.json")
 
 pack_name = file.name(dir.name(path_install))
 model_name = pack_name + ".ddm"
@@ -306,6 +307,22 @@ if file.exists(det_finders_file)
 
     ref findersData = CsvRead(det_finders_file,"")
     do dbr.apps.detfinder.import(database,findersData)
+}
+//#endregion
+
+//#region DET Recbin
+if file.exists(recbindef_file)
+{
+    do print("\nESTABLECIENDO DEFINICIÓN DE RECUPERACIÓN (PAPELERA)")
+    
+    ref defs = from.json(file.rtext(recbindef_file))
+    for i = 0; i < list.count(defs)
+    {
+        ref recbindef = list.obj(defs,i)
+        
+        do print("- "+@@(recbindef,"$det"))
+        do dbr.apps.itemtype.recbindef(database,recbindef)
+    }
 }
 //#endregion
 

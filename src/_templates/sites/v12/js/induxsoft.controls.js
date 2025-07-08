@@ -78,7 +78,7 @@ class EditSelect extends HTMLElement
                 }
             });
 
-            this.manualInput.addEventListener('keyup', () => 
+            this.manualInput.addEventListener('change', () => 
             {
                 this.setValue(this.manualInput.value, false);
                 this.select.setAttribute('text-value', this.manualInput.value);
@@ -1342,7 +1342,7 @@ class CheckList extends HTMLElement
             delItem.addEventListener('click', () => {
                 this._addOrUpdateItem(containerItem, true);
             });
-            txtItem.addEventListener('keyup', (e) => {
+            txtItem.addEventListener('change', (e) => {
                 containerItem.setAttribute('item-text', txtItem.value);
                 this._addOrUpdateItem(containerItem);
                 if (e.key === 'Enter' && containerItem.nextElementSibling && containerItem.nextElementSibling.childNodes[0] && containerItem.nextElementSibling.childNodes[0].childNodes[2]){
@@ -1829,6 +1829,7 @@ class StackEdit extends HTMLElement
     subtitle = '';
     colorField = '';
     backColorField = '';
+    stylesField = '';
 
     _stackContainer = null;
     onElementClick = null;
@@ -1855,14 +1856,15 @@ class StackEdit extends HTMLElement
         document.addEventListener('DOMContentLoaded', () => 
         {
             const shadow =      this.attachShadow({ mode: 'closed' });
-            this.captionA =     (this.getAttribute('caption-a')??'');
-            this.captionB =     (this.getAttribute('caption-b')??'');
-            this.captionC =     (this.getAttribute('caption-c')??'');
-            this.captionD =     (this.getAttribute('caption-d')??'');
-            this.title =        (this.getAttribute('title')??'');
-            this.subtitle =     (this.getAttribute('subtitle')??'');
+            this.captionA =     (this.getAttribute('caption-a')??'a');
+            this.captionB =     (this.getAttribute('caption-b')??'b');
+            this.captionC =     (this.getAttribute('caption-c')??'c');
+            this.captionD =     (this.getAttribute('caption-d')??'d');
+            this.title =        (this.getAttribute('title')??'title');
+            this.subtitle =     (this.getAttribute('subtitle')??'subtitle');
             this.colorField =   (this.getAttribute('color-field')??'#000');
             this.backColorField = (this.getAttribute('backcolor-field')??'#FFF');
+            this.stylesField = (this.getAttribute('styles-field')??'styles');
 
             this._stackContainer = this._createFullElement('div', { id:'_stackContainer' });
 
@@ -2040,8 +2042,8 @@ class StackEdit extends HTMLElement
             this._refreshView();
         });
 
-        if ((this.getAttribute('styles-field')??'') != '')
-            containerItem.setAttribute('style', (item[this.getAttribute('styles-field')]??''));
+        if ((item?.[this.stylesField]??'') != '')
+            containerItem.setAttribute('style', (item?.[this.stylesField]??''));
 
         return containerItem;
     }
@@ -3283,7 +3285,7 @@ class FilterDateRange extends HTMLElement
             this._container = this._createFullElement('div', { id: 'FDR_container', class: 'border d-flex align-items-center gap-1' });
             this._field_va1 = this._createFullElement('input', { type: 'hidden', id: 'FDR_ipt_v1' });
             this._field_va2 = this._createFullElement('input', { type: 'hidden', id: 'FDR_ipt_v2' });
-            this._field_mod = this._createFullElement('input', { type: 'hidden', id: 'FDR_ipt_md', name: (this.getAttribute('mode-field') ?? '') });
+            this._field_mod = this._createFullElement('input', { type: 'hidden', id: 'FDR_ipt_md', name: (this.getAttribute('mode-field') ?? 'mode') });
 
             const panel_mode = this._createFullElement('div', { id: 'FDR_pnl_mode' });
             const panel_monthly = this._createFullElement('div', { id: 'FDR_pnl_monthly', class:'grow-1 panel' });
@@ -3301,10 +3303,33 @@ class FilterDateRange extends HTMLElement
             this.after(this._field_va1);
             this.after(this._field_va2);
 
+            const now = new Date();
+
+            if (!this.hasAttribute("years-options")) {
+                let cy = now.getFullYear();
+                let years = [];
+
+                for (let i = (cy - 3); i < (cy + 4); i++) {
+                    years.push(i);
+                }
+
+                this.setAttribute("years-options",years.join(","));
+            }
+            if (!this.hasAttribute("lastdays-options")) this.setAttribute("lastdays-options","3,7,15,30");
+            if (!this.hasAttribute("custom-range")) this.setAttribute("custom-range","true");
+
             if ((this.getAttribute('selection')??'').trim() != '')
             {
                 try { this._selection = JSON.parse((this.getAttribute('selection')??'{}')); }
                 catch { alert('El atributo selection tiene un formato JSON inválido'); }
+            }
+            else if (!this._selection)
+            {
+                this._selection = {
+                    mode: "month",
+                    year: now.getFullYear(),
+                    month: (now.getMonth()+1).toString()
+                }
             }
 
             this._fillSelectMode(select_mode);
@@ -3436,7 +3461,9 @@ class FilterDateRange extends HTMLElement
         const select_year = this._createFullElement('select', { id: 'FDR_sel_year', class: 'induxsoft-form-select', name: yearfield });
         div_years.appendChild(select_year);
 
-        let year_opts = (new Date().getFullYear().toString());
+        const now = new Date();
+        
+        let year_opts = (now.getFullYear().toString());
         if ((this.getAttribute('years-options') ?? '').trim() != '') year_opts = this.getAttribute('years-options');
         
         year_opts.split(',').forEach(y => {
@@ -3446,6 +3473,13 @@ class FilterDateRange extends HTMLElement
 
         const input_mont = this._createFullElement('input', { type: 'hidden', name: monthfield });
         container.appendChild(input_mont);
+
+        if (this._selection && this._selection[this._field_mod.name] == 'month')
+        {
+            select_year.value = (this._selection[yearfield] ?? '');
+            input_mont.value = (this._selection[monthfield] ?? '');
+            this._setFieldValues(select_year, input_mont);
+        }
 
         select_year.addEventListener('change', e => { 
             this._setFieldValues(select_year, input_mont);
@@ -3457,13 +3491,6 @@ class FilterDateRange extends HTMLElement
         const active_month = (button) => {
             div_months.querySelectorAll('.month-button').forEach(b => b.classList.remove('active-month'));
             button.classList.add('active-month');
-        }
-        
-        if (this._selection && this._selection[this._field_mod.name] == 'month')
-        {
-            select_year.value = (this._selection[yearfield] ?? '');
-            input_mont.value = (this._selection[monthfield] ?? '');
-            this._setFieldValues(select_year, input_mont);
         }
 
         const month_select = this._createFullElement('select', { id:'FDR_month_select', class:'induxsoft-form-select' });
@@ -3512,8 +3539,8 @@ class FilterDateRange extends HTMLElement
         const div_datef = this._createFullElement('div', { id: 'FDR_div_datef', class: 'd-flex align-items-center gap-2' }, `<small class="text-secondary">${ (this.getAttribute('label-from') ?? 'Desde:') }</small>`);
         const div_datet = this._createFullElement('div', { id: 'FDR_div_datet', class: 'd-flex align-items-center gap-2' }, `<small class="text-secondary">${ (this.getAttribute('label-to') ?? 'Hasta:') }</small>`);
         
-        let name_datef = (this.getAttribute('from-field') ?? 'fromdate');
-        let name_datet = (this.getAttribute('to-field') ?? 'todate');
+        let name_datef = (this.getAttribute('from-field') ?? 'from');
+        let name_datet = (this.getAttribute('to-field') ?? 'to');
 
         const input_datef = this._createFullElement('input', { type: 'date', id: 'FDR_ipt_datef', class: 'induxsoft-form-control no-border input-date', disabled: '', name: name_datef });
         const input_datet = this._createFullElement('input', { type: 'date', id: 'FDR_ipt_datet', class: 'induxsoft-form-control no-border input-date', disabled: '', name: name_datet });
