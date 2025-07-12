@@ -2,6 +2,7 @@ var InduxsoftNumberFields =
 {
     Init()
     {
+        return
         const number_fields = document.querySelectorAll('.induxsoft-num-field[type="number"]');
         let formId = "";
 
