@@ -46,7 +46,9 @@ add_install_model_exception::&db,file
         }
        
     }
+    new var{@"varvalue":strlvar}
     do dbr.vars.define(db,vardata,@@(cat,"$id"))
+    do dbr.update(db,"globalvar",var,"varname=@varname",vardata)
 
     exception{do print(last_error())}
 }
