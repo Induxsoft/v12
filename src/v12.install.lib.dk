@@ -134,6 +134,7 @@ vars_file = path.concat(path_app_info,"vars.json")
 reports_file = path.concat(path_app_info,"reports.json")
 detlogs_file = path.concat(path_app_info,"detlogs.json")
 recbindef_file = path.concat(path_app_info,"recbindef.json")
+rel_efectivo_det=path.concat(path_app_info,"rel_efectivo_det.json")
 
 pack_name = file.name(dir.name(path_install))
 model_name = pack_name + ".ddm"
@@ -392,6 +393,18 @@ if file.exists(detlogs_file)
     ref detlogs = from.json(file.rtext(detlogs_file))
     ref @DB = database
     do webshell.detlog.register(detlogs)
+}
+//#endregion
+//#region Relación efectivo
+if file.exists(rel_efectivo_det)
+{
+    do print("\nREGISTRANDO RELACION DE EFECTIVO")
+    ref relData=from.json(file.rtext(rel_efectivo_det))
+    for i = 0; i < @count(relData)
+    {
+        ref reldt=@item(relData,i)
+        do dbr.apps.save(database,"rel_efe_det",reldt)
+    }
 }
 //#endregion
 
