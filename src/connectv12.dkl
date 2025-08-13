@@ -11,9 +11,9 @@ program "connectv12.dkl"
     host = trim(@@(args,"$host"))
     qname = trim(@@(args,"$db"))
     
-    if host == "" { do rise_error(99,'Debe indicar el host de de su sitio. Ej: "host=host.dominio.com"') }
-    if qname == "" { do rise_error(99,'Debe indicar un nombre cualificado de conexión. Ej: "db=miconexion@grupoapps"') }
-    if list.count(split(qname,"@")) != 2 { do rise_error(99,"Nombre cualificado de conexión inválido.") }
+    if host == "" { do rise_error(99,'Debe indicar el host de de su sitio. Ej: host="host.dominio.com"') }
+    if qname == "" { do rise_error(99,'Debe indicar un nombre cualificado de conexión. Ej: db="miconexion@grupoapps"') }
+    if not(isany("@",qname)) { do rise_error(99,"Nombre cualificado de conexión inválido.") }
     if not(dba.cnnexists(qname)) { do rise_error(99,"No se encontro el nombre cualificado de conexión proporcionado.") }
 
     cfg_folder = "_config/"
