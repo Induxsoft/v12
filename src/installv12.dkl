@@ -45,11 +45,9 @@ program "InstallV12"
 
     generar_lista::&packs,&catalog,&lista
     {
-        @iterations=@iterations+1
         if @iterations>@max_deep_recursive { return }
 
         ref n_packs=list.create()
-        
         for i=0;i<@count(packs)
         {
             pack=tolower(trim(list.str(packs,i)))
@@ -65,6 +63,15 @@ program "InstallV12"
                         do list.add(lista,pack)
                     }
                 }
+                else if @count(components) == 1
+                {
+                    pack = list.str(components,0)
+                    if file.extension(pack)=="" { pack=pack+@file_ext}
+                    if not(is_inlist(lista,pack))
+                    {
+                        do list.add(lista,pack)
+                    }
+                }
                 else
                 {
                     for j=0;j<@count(components)
@@ -72,13 +79,15 @@ program "InstallV12"
                         comp=trim(list.str(components,j))
                         do list.add(n_packs,comp)
                     }
-                    if @count(n_packs)>0{ do generar_lista(n_packs,catalog,lista) }
+                    if @count(n_packs)>0
+                    {
+                        @iterations=@iterations+1
+                        do generar_lista(n_packs,catalog,lista)
+                    }
                     do list.clear(n_packs)
                 }
             }
         }
-        
-       
     }
 
     installer_list::source,install_folder, install_program,&lista
@@ -130,7 +139,7 @@ program "InstallV12"
                 ref lista=list.create()
                 do list.add(packs,p)
                 do generar_lista(packs,catalog,lista)
-                if @count(lista)<1 { do list.add(np,p) }
+                if @count(lista)<1 && not(is_inlist(np,p)) { do list.add(np,p) }
                 else
                 {
                     ref lf=list.create()
@@ -158,7 +167,7 @@ program "InstallV12"
                                 }
                                 else { do list.add(np,itm) }
                             }
-                            else { do list.add(np,itm) }
+                            else if not(is_inlist(np,itm)) { do list.add(np,itm) }
                         }
                     }
                 }
