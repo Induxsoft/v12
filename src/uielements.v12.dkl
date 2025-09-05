@@ -293,7 +293,7 @@ module
             //     // Title
             //     h5(class="tex-no-break m-0" id="v12FormBar_title" title="#<title_view>"){$"#<title_view>"}
             // }
-            #$ nav(class="navbar navbar-expand-lg navbar-light m-0 p-0")
+            #$ nav(class="navbar navbar-expand-lg navbar-light m-0 p-0" id="v12NavBar")
             {
                 div(class="container-fluid p-0 justify-item-end" id="main_bar")
                 {
@@ -587,7 +587,6 @@ module
             '}
         }
 
-        #!
         do uie.close_crud_context()
     }
 
@@ -686,7 +685,8 @@ module
             /* Cuando aparece el botón expandir barra */
             @media screen and (max-width:991px){
                 /* No ocultar botones o links que tengan la clase (no-hidden) */
-                .collapse:not(.show){
+                #v12NavBar .collapse:not(.show)
+                {
                     display: initial;
                     & button:not(.no-hidden),a:not(.no-hidden){
                         display:none;   
