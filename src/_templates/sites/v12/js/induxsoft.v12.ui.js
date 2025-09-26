@@ -26,6 +26,8 @@ function v12_on_resize()
 function getPrintableHTML()
 {
     const container = document.createElement("div");
+    container.setAttribute("data-print-mode",1);
+
     container.innerHTML = `
     <!-- link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous" -->
     <style>
@@ -42,7 +44,8 @@ function getPrintableHTML()
     </style>
     `;
 
-    document.querySelectorAll(".printable-element").forEach(el => {
+    document.querySelectorAll(".printable-element").forEach(el => 
+    {
         if (el.tagName==="EDIT-TABLE") container.appendChild(el._shadow.getElementById(el.id).cloneNode(true));
         else container.appendChild(el.cloneNode(true));
     });

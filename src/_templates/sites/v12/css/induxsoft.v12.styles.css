@@ -11,6 +11,10 @@
 
 .show-on-print { display: none !important; }
 
+div[data-print-mode="1"] .show-on-prin{display: unset !important; }
+div[data-print-mode="1"] .hide-on-prin{display: none !important; }
+
+
 @media print
 {
     .show-on-print { display: unset !important; }
