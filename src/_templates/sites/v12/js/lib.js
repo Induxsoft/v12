@@ -148,5 +148,26 @@ var tools =
         {
             frmbtn.disabled = disable;
         });
+    },
+    FireError(msg,form,err_timeout=7)
+    {
+        if(!form)return;
+        const div = document.createElement("div");
+        const text = document.createTextNode(msg);
+        
+        div.classList.add("alert", "alert-danger", "overflow-auto", "mb-2");
+        div.appendChild(text);
+        /**
+         * [ insertar elemento adyacente ]
+         * 
+         * beforebegin: Para insertar el nodo HTML antes del inicio del elemento.
+         * beforeend: Éste es similar al appendChild(). Como sugiere el nombre, la posición beforeend coloca el elemento justo después del último hijo.
+         * afterbegin: como sugiere el nombre, esta opción inserta el elemento justo después de la etiqueta de apertura del nodo seleccionado y lo coloca antes del primer hijo.
+         * afterend: se refiere a la posición después de que se cierra la etiqueta de nodo HTML de destino.
+         */
+        form.insertAdjacentElement("beforebegin",div);
+        setTimeout(() => {
+            div.remove();
+        }, (err_timeout * 1000));
     }
 }
