@@ -11,8 +11,8 @@
 
 .show-on-print { display: none !important; }
 
-div[data-print-mode="1"] .show-on-prin{display: unset !important; }
-div[data-print-mode="1"] .hide-on-prin{display: none !important; }
+div[data-print-mode="1"] .show-on-print{display: unset !important; }
+div[data-print-mode="1"] .hide-on-print{display: none !important; }
 
 
 @media print
