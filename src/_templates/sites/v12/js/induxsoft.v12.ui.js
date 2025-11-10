@@ -46,7 +46,20 @@ function getPrintableHTML()
 
     document.querySelectorAll(".printable-element").forEach(el => 
     {
-        if (el.tagName==="EDIT-TABLE") container.appendChild(el._shadow.getElementById(el.id).cloneNode(true));
+        if (el.tagName==="EDIT-TABLE" )
+        {
+            let div=document.createElement("div");
+            div.style.cssText="display:flex;width:auto;min-width:100%;overflow: auto;";
+            div.appendChild(el._shadow.getElementById(el.id).cloneNode(true));
+            container.appendChild(div);
+        }
+        else if(el.tagName==="TABLE")
+        {
+            let div=document.createElement("div");
+            div.style.cssText="display:flex;width:auto;min-width:100%;overflow: auto;";
+            div.appendChild(el);
+            container.appendChild(div);
+        }
         else container.appendChild(el.cloneNode(true));
     });
     // Array.prototype.forEach.call(container.querySelectorAll("*"), function(element){
