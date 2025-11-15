@@ -407,7 +407,7 @@ module
                             if (list) list.change_event = (data) => { v12navbar.selectAction(data); }
                         });
 
-                        top.notiman._params = #<to.json(@("&parameters"))>;
+                        if(top && top.notiman)top.notiman._params = #<to.json(@("&parameters"))>;
                         // document.title ||= this.titleView;
                     },
                     clickMainAction(id,def_href)
@@ -586,7 +586,7 @@ module
                 });
             '}
         }
-
+        #!
         do uie.close_crud_context()
     }
 
