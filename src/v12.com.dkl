@@ -110,4 +110,33 @@ module ":v12.com"
 
         do runscript(@@(provcnl,"$lib"), "com_context", com_context)
     }
+
+    function sendMessageV2(&db,&message,&replace)
+    {
+        namespace "v12.com"
+
+        if trim(@@(message,"$channel")) == "" { do rise_error(0, "Debe indicar un nombre de canal") }
+        if isnull(replace) { ref replace = record.create() }
+
+        ref config = v12.channel.config.get(db,@@(message,"$channel"))
+        tmpltename = @@(message,"$template")
+        tmpltediry = dbr.vars.getd(db, "dbext_comm_msg_templates", "_templates/messages/")
+        tmpltepath = path.concat(tmpltediry, tmpltename)
+
+        if trim(tmpltename) != "" && file.exists(tmpltepath)
+        {
+            message<"message">: file.rtext(tmpltepath)
+        }
+
+        ref channel = v12.channel.get(db,@@(message,"$channel"))
+        ref provcnl = v12.channel.get_prov(db,@@(message,"$channel"))
+
+        if isnull(channel) { do rise_error(0,"No existe un canal con el nombre indicado") }
+        if @@(provcnl,"$lib") == "" { do rise_error(0,"No se ha registrado la ruta del archivo en el campo 'lib' del proveedor") }
+        if not(file.exists(@@(provcnl,"$lib"))) { do rise_error(0,"El archivo registrado en lib no existe") }
+
+        include @@(provcnl,"$lib")
+
+        return lib.sendMessage(config, message, replace)
+    }
 }
