@@ -383,6 +383,25 @@ if list.count(@permissions_to_import) > 0
     admins_groupid = dbr.security.admins(database)
     do dbr.security.assign(database,admins_groupid,@permissions_to_import)
 }
+
+codeblock "Asignación de privilegios a grupos"
+{
+    do print("\nNUEVOS PRIVILEGIOS A GRUPOS ESPECÍFICOS")
+
+    if not(isset("@permission_by_group")) { ref @permission_by_group = record.create() }
+    ref groupids = list.create_from_fields(@permission_by_group)
+    
+    for i = 0; i < list.count(groupids)
+    {
+        groupid = list.str(groupids, i)
+        ref permissions = @@(@permission_by_group, "&"+groupid)
+
+        do print(groupid)
+        do dbr.security.assign(database, groupid, permissions)
+    }
+
+    exception { do print(last_error()) }
+}
 //#endregion
 
 //#region Bitácoras por DET
