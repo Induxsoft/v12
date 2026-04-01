@@ -29,6 +29,55 @@ var tools =
         );
     },
 
+    copy(text)
+    {
+        if (!text) return;
+
+        if (!this._toast)
+        {
+            const overlay = document.createElement('div');
+            overlay.className = 'position-fixed top-0 end-0 p-3';
+            overlay.style.zIndex = '1080';
+            
+            const toast = document.createElement('div');
+            toast.className = 'toast align-items-center bg-white';
+            toast.role = 'alert';
+            toast.ariaLive = 'assertive';
+            toast.ariaAtomic = 'true';
+            toast.innerHTML = `
+            <div class="toast-body">
+                Se copio al portapapeles.
+            </div>
+            `;
+            overlay.appendChild(toast);
+            document.body.appendChild(overlay);
+            this._toast = toast;
+        }
+        let bsToast = bootstrap.Toast.getInstance(this._toast);
+        if (!bsToast) bsToast = new bootstrap.Toast(this._toast);
+
+        navigator.clipboard.writeText(text)
+        .then(() => { bsToast.show() })
+        .catch(err => { alert("Error al copiar.") });
+    },
+
+    copyOf(id) {
+        const el = document.getElementById(id);
+        this.copy(el.value ?? el.textContent);
+    },
+
+    async pasteTo(id)
+    {
+        const input = document.getElementById(id);
+        const text = await navigator.clipboard.readText();
+        input.value = text;
+    },
+
+    setGuidTo(id,dashes=true) {
+        const input = document.getElementById(id);
+        input.value = this.uuid(dashes);
+    },
+
     ParseBool(v) 
     {
         if (typeof v === "boolean") return v;
