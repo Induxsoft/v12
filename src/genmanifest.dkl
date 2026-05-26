@@ -1,0 +1,92 @@
+#include "dkli.dkh"
+#!
+module ""
+{
+    #include "functions.dkh"
+    #include "serialize.dkh"
+    
+    push.file.manifest::&files,&lista
+    {
+        for i = 0; i < @count(files)
+        {
+            do print(">>> Manifiesto encontrado: "+list.str(files,i))
+            do list.add(lista,list.str(files,i))
+        }
+    }
+    manifest::ruta,&lista
+    {
+        file_filter="*"+@ext_file_manifest
+        do push.file.manifest(list.files(ruta,file_filter),lista)
+
+        ref list_paths=list.dirs(ruta)
+    
+        ref l=list.create()
+
+        for i=0;i<@count(list_paths)
+        {
+            path=list.str(list_paths,i)
+            do print("> Buscando archivo en: "+path)
+            do push.file.manifest(list.files(path,file_filter),lista)
+            
+            if @rucursivo{do manifest(path,lista)}
+        }
+    }
+    parse.json::json
+    {
+        return from.json(json)
+
+        exception{return @null}
+    }
+    create.manifest::&lista
+    {
+        for i = 0; i < @count(lista)
+        {
+            f=list.str(lista,i)
+
+            data=file.rtext(f)
+            ref json=parse.json(data)
+            id=trim(@@(json,"$id"))
+            if id !=""
+            {
+                @manifest<id+"*">:json
+            }
+        }
+    }
+    
+    ref args=commandline("=")
+    ruta=trim(@@(args,"$ruta"))
+    output=trim(@@(args,"$output"))
+    
+    @rucursivo=@true
+    
+    if field.exist(args,"recursive"){@rucursivo=parse.bool(@@(args,"$recursive"))}
+
+    if ruta == ""{do rise_error(99,"No ha indicado una ruta")}
+    // if output == ""{do rise_error(99,"No ha indicado una ruta de salida")}
+
+    do print("Obtener archivos de manifiesto: "+ruta)
+    @ext_file_manifest=".manifest"
+    @file_manifest="manifest.json"
+    ref @manifest=record.create()
+    ref lista=list.create()
+    
+    //obtener archivos .manifest
+    do manifest(ruta,lista)
+
+    do print("> Crear manifiesto.json")
+    //formar el objeto manifest.json
+    do create.manifest(lista)
+
+    if output !=""{do dir.ensure(output)}
+
+    //guardar archivo
+    output=path.concat(output,@file_manifest)
+    do file.wtext(output,to.json(@manifest))
+
+    do print("Archivo guardado: "+output)
+
+    exception
+    {
+        do print("Error: "+last_error())
+    }
+}
