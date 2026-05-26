@@ -495,6 +495,10 @@ if dir.exists(path_tasks)
         do print(ftext("- #<task_jname>"))
     }
 }
+
+//establecer versión
+do set.version(database,pack_name,@null)
+
 //#endregion
 
 if dbr.is_open(database){ do dbr.close(database) }
