@@ -1,0 +1,67 @@
+#include "dkli.dkh"
+#!
+program ""
+{
+    #include "functions.dkh"
+    #include "serialize.dkh"
+
+    list.value::&lstr,position
+    {
+        return list.str(lstr,position)
+
+        exception{return ""}
+    }
+    version.parse::cadena //1.0.67
+    {
+        ref s=split(cadena,".")
+        
+        new r
+        {
+            @"major": parse.num(list.value(s,0))
+            @"minor": parse.num(list.value(s,1))
+            @"revision": parse.num(list.value(s,2))
+        }
+
+        return r
+    }
+
+    version.compare::version1,version2
+    {
+        // 0 - es igual
+        // 1 - si la version 1 es mayor a version 2
+        // 2 - version 2 es mayor a version 1
+        
+        ref ver1=version.parse(version1) 
+        ref ver2=version.parse(version2) 
+        
+        if ver1.major  > ver2.major{return 1}
+        if ver1.major < ver2.major{return 2}
+        
+        if ver1.minor > ver2.minor{return 1}
+        if ver1.minor < ver2.minor{return 2}
+        
+        if ver1.revision > ver2.revision{return 1}
+        if ver1.revision < ver2.revision{return 2}
+        
+        return 0
+        
+    }
+
+    // ref args=commandline("=")
+    // ver_actual=@@(args,"$ver1")
+    // ver_paquete=@@(args,"$ver2")
+
+    // vcompare=version.compare(ver_actual,ver_paquete)
+
+    // do print("Compare: "+str(vcompare))
+    
+    // if vcompare < 2
+    // {
+    //     do print("> retornar ..")
+    //     return
+    // }
+
+    // //instalar 
+
+    // do print("> INSTALAR ---")
+}

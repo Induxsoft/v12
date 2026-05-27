@@ -1,0 +1,274 @@
+#include "dkli.dkh"
+#!
+module ""
+{
+    #include "functions.dkh"
+    #include "serialize.dkh"
+    #include "dbr.dkh"
+    #include "webcl.dkh"
+    #include "version.dkl"
+    #include "dbm.dkl"
+    #include "ddm.json.dkl"
+    #include "ddm.mysql.dkl"
+
+    parse.json::json
+    {
+        return from.json(json)
+
+        exception{return @null}
+    }
+    search.manifest::id_pack
+    {
+        filename=id_pack+".manifest"
+        file_path=path.concat(@path_dir,filename)
+
+        do Log(">> Obtener manifiesto de:"+file_path )
+
+        if not(file.exists(file_path)){return @null}
+
+        return parse.json(file.rtext(file_path))
+    }
+    //obtener paquete y version de la base de datos
+    get.pack::id_pack
+    {
+        for i = 0; i < @count(@paquetes)
+        {
+            ref p=@item(@paquetes,i)
+            id=trim(@@(p,"$pack_id"))
+            if id_pack == id{return p}
+        }
+
+        return @null
+    }
+    install.pack::&lista
+    {
+        for i = 0; i < @count(lista)
+        {
+            pack=list.str(lista,i)
+            id_pack=replace(pack,file.extension(pack),"")
+            ref manifest=search.manifest(id_pack)
+
+            if trim(@@(manifest,"$id")) !=""
+            {
+                do Log(">> Manifiesto encontrado: "+id_pack)
+                ref pack_obj=get.pack(pack)
+                
+                if not(isnull(pack_obj))
+                {
+                    version=@@(manifest,"$version")
+                    version_manifest=@@(@manifiesto,"$version")
+
+                    version_schema=@@(pack_obj,"$schema_ver")
+                    version_schema_manifest=@@(@manifiesto,"$schema_ver")
+
+                    if not(@deploy_pack)
+                    {
+                        //verificar si hacer deploya al paquete
+                        @deploy_pack=version.compare(version,version_manifest) == 2
+                    }
+                    if not(@install_pack)
+                    {
+                        @install_pack=version.compare(version_schema,version_schema_manifest) == 2
+                    }
+                    do Log(">> Version código fuente: "+version +" manifiesto: "+version_manifest)
+                    do Log(">> Version schema: "+version_schema +" manifiesto: "+version_schema_manifest)
+                    // if @deploy_pack && @install_pack{return @true}
+                }
+            }
+            else
+            {
+                do Log(">>> Manifiesto no encontrado del paquete: "+pack)
+            }
+        }
+
+        return @false
+    }
+    
+    deploy_packs::&params
+    {
+        packs=trim(@@(params,"$packs"))
+        cmd = ftext('deployv12 packs="#<packs>" -hide-log')
+        res = exec(@devkron,cmd,@true)
+    }
+    install_pakcs::&db,&params
+    {
+        packs=trim(@@(params,"$packs"))
+        qname=trim(@@(params,"$qname"))
+        if qname ==""{qname=dbr.full_qname(db)}
+
+        cmd = ftext('installv12 db="#<qname>" packs="#<packs>" -hide-log')
+        res = exec(@devkron,cmd,@false)
+    }
+    ref @buffer=text.create()
+    Log::txt
+    {
+        do print(txt)
+        do text.say(@buffer,txt)
+    }
+
+    saveLog::path
+    {
+        if path == ""{return}
+
+        do file.wtext(path,text.get(@buffer))
+    }
+    parse.qname::qname
+    {
+        qname=replace(qname,"\\","/")
+        if not(contains(qname,"/")){return qname}
+
+        ref s=split(qname,"/")
+
+        return list.str(s,1)
+    }
+
+    if isset("@context"){ref args=@context}
+    else{ref args=commandline("=")}
+    
+    @path_log=""
+    @source_url="https://install-v12.induxsoft.net/"
+    @cat_file="catalog.json"
+    @manifest_file="manifest.json"
+    @file_ext=".zip"
+    @devkron="./dkl"
+
+    qname=trim(@@(args,"$db"))
+    from=trim(@@(args,"$from"))
+
+    if qname == ""{qname=trim(@@(args,"$qname"))}
+    if qname == ""{do rise_error(99,"No ha indicado una conexión `qname` ")}
+
+    @path_log="/usr/data/outputs/updatev12/logs/"+parse.qname(qname)+"_"+date_str(now(),"yyyy-MM-dd")+".log"
+
+    if trim(@@(args,"$from"))!="" { @source_url=trim(@@(args,"$from")) }
+    if trim(@@(args,"$path_dkl")) != ""{@devkron=trim(@@(args,"$path_dkl"))}
+
+    args<"qname">:qname
+
+    @path_root="_deployed"
+
+    do Log("=======================INICIO========================")
+    do Log("> Abrir base de datos")
+    ref db=dbr.open(qname)
+
+    do Log(">> Crear tabla de logs si no existe")
+    module "Crear tabla de log"
+    {
+        do dbm.checkLogTables(db)
+        exception{do Log(">>" + last_error())}
+    }
+    
+
+    do Log("> Obtener paquetes instalados")
+    ref @paquetes=dbr.list(db,"SELECT DISTINCT
+            COALESCE(p.pack, a.pack_id) AS pack_id,
+
+            COALESCE(
+                p.schema_ver,
+                ''
+            ) AS schema_ver,
+
+            (
+                SELECT trim(l.sys_dtcreated)
+                FROM sys_model_log l
+                WHERE l.source LIKE CONCAT('%', COALESCE(p.pack, a.pack_id), '%')
+                ORDER BY l.sys_dtcreated DESC
+                LIMIT 1
+            ) AS last_install
+
+        FROM sys_app_catalog a
+        LEFT JOIN sys_packs p 
+        ON p.pack = a.pack_id;",@null)
+
+    // descargar archivo de manifiesto
+    
+    do Log("Paquetes instalados: "+str(@count(@paquetes)))
+
+    do Log("> Descargar manifiesto desde: "+@source_url)
+
+    ref @manifest_packs=from.json(http.get(@source_url+@manifest_file))
+
+    do Log("> Manifiesto descargado")
+
+    md5_url=md5(@source_url)
+    @path_dir=path.concat(@path_root,md5_url)
+
+    for i=0;i< @count(@paquetes)
+    {
+        ref paquete=@item(@paquetes,i)
+        @deploy_pack=@false
+        @install_pack=@false
+        //buscar el archivo .manifest 
+        id_pack=trim(@@(paquete,"$pack_id"))
+        ref @manifiesto=@@(@manifest_packs,"&"+id_pack)
+        do Log(">> Verificar manifiesto del paquete: "+id_pack)
+
+        ref manifest=search.manifest(id_pack)
+        // verificar las versiones 
+        if isnull(manifest)
+        {
+            do Log(">> No se econtró el manifiesto de: "+id_pack)
+            do Log(">> Buscar manifiesto del archivo "+@cat_file)
+            //obtener el nombre el archivo zip de catalog
+            file_path_catalog=path.concat(@path_dir,@cat_file)
+            do Log(">> Buscar archivo: "+file_path_catalog)
+            if file.exists(file_path_catalog)
+            {
+                do Log(">> Archivo entoncontrado: "+file_path_catalog)
+                ref catalog=parse.json(file.rtext(file_path_catalog))
+                ref cat_items=@@(catalog,"&"+id_pack)
+                do Log(">> Verficar si el paquete requiere deploy o instalación")
+                do install.pack(cat_items)
+            }
+        }
+        else
+        {
+            version=@@(manifest,"$version")
+            version_manifest=@@(@manifiesto,"$version")
+
+            version_schema=@@(paquete,"$schema_ver")
+            version_schema_manifest=@@(@manifiesto,"$schema_ver")
+
+            do Log(">> Manifiesto encontrado: "+id_pack)
+            do Log(">> Version código fuente: "+version +" manifiesto: "+version_manifest)
+            do Log(">> Version schema: "+version_schema +" manifiesto: "+version_schema_manifest)
+
+            @deploy_pack=version.compare(version,version_manifest) == 2
+            @install_pack=version.compare(version_schema,version_schema_manifest) == 2
+
+            if version_schema_manifest == ""{@install_pack=@true}
+        }
+        do Log(">> Requiere deploy: "+ifstr(@deploy_pack,'SÍ','NO'))
+        do Log(">> Requiere instalación: "+ifstr(@install_pack,'SÍ','NO'))
+        //hacer deploy si es necesario 
+        args<"packs">:id_pack
+        if @deploy_pack 
+        {
+            do Log(">> Haciendo deploy de: "+id_pack)
+            do deploy_packs(args)
+        }
+        if @install_pack
+        {
+            do Log(">> Realizando instalación de: "+id_pack)
+            do install_pakcs(db,args)
+        }
+
+        exception
+        {
+            do Log("Error: "+last_error())
+        }
+
+        do Log("\n\n")
+    }
+    
+    exception
+    {
+        do Log("Error ocurrido: "+last_error())
+    }
+
+    if isset("@context"){@context<"status">:"finished"}
+    
+    if isset("db"){do dbr.close(db)}
+
+    do saveLog(@path_log)
+}
