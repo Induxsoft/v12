@@ -42,6 +42,7 @@ module ""
     }
     install.pack::&lista
     {
+        packs_to_install=""
         for i = 0; i < @count(lista)
         {
             pack=list.str(lista,i)
@@ -51,6 +52,7 @@ module ""
             if trim(@@(manifest,"$id")) !=""
             {
                 do Log(">> Manifiesto encontrado: "+id_pack)
+                packs_to_install=packs_to_install+id_pack +","
                 ref pack_obj=get.pack(pack)
                 
                 if not(isnull(pack_obj))
@@ -81,7 +83,9 @@ module ""
             }
         }
 
-        return @false
+        if packs_to_install !=""{return rremove(packs_to_install,1)}
+
+        return packs_to_install
     }
     
     deploy_packs::&params
@@ -219,7 +223,16 @@ module ""
                 ref catalog=parse.json(file.rtext(file_path_catalog))
                 ref cat_items=@@(catalog,"&"+id_pack)
                 do Log(">> Verficar si el paquete requiere deploy o instalación")
-                do install.pack(cat_items)
+                ids_packs= install.pack(cat_items)
+                if ids_packs == ""
+                {
+                    @deploy_pack=@true
+                    @install_pack=@true
+                }
+                else
+                {
+                    id_pack=id_pack+","+ids_packs
+                }
             }
         }
         else
