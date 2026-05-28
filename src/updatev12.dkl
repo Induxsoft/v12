@@ -125,7 +125,7 @@ module ""
     if isset("@context"){ref args=@context}
     else{ref args=commandline("=")}
     
-    @path_log=""
+    @path_log="/usr/data/outputs/updatev12/logs/"
     @source_url="https://install-v12.induxsoft.net/"
     @cat_file="catalog.json"
     @manifest_file="manifest.json"
@@ -134,11 +134,12 @@ module ""
 
     qname=trim(@@(args,"$db"))
     from=trim(@@(args,"$from"))
-
+    path_log=trim(@@(args,"$path_log"))
     if qname == ""{qname=trim(@@(args,"$qname"))}
     if qname == ""{do rise_error(99,"No ha indicado una conexión `qname` ")}
-
-    @path_log="/usr/data/outputs/updatev12/logs/"+parse.qname(qname)+"_"+date_str(now(),"yyyy-MM-dd")+".log"
+    if path_log !=""{@path_log=path_log}
+    
+    @path_log=@path_log+parse.qname(qname)+"_"+date_str(now(),"yyyy-MM-dd")+".log"
 
     if trim(@@(args,"$from"))!="" { @source_url=trim(@@(args,"$from")) }
     if trim(@@(args,"$path_dkl")) != ""{@devkron=trim(@@(args,"$path_dkl"))}
