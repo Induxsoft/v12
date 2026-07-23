@@ -48,7 +48,6 @@ program "Deployment"
 
     generar_lista::&packs,&catalog,&lista
     {
-        @iterations=@iterations+1
         if @iterations>@max_deep_recursive { return }
 
         ref n_packs=list.create()
@@ -68,6 +67,15 @@ program "Deployment"
                         do list.add(lista,@source_url+pack)
                     }
                 }
+                else if @count(components) == 1
+                {
+                    pack = list.str(components,0)
+                    if file.extension(pack)=="" { pack=pack+@file_ext}
+                    if not(is_inlist(lista,@source_url+pack))
+                    {
+                        do list.add(lista,@source_url+pack)
+                    }
+                }
                 else
                 {
                     for j=0;j<@count(components)
@@ -75,13 +83,15 @@ program "Deployment"
                         comp=trim(list.str(components,j))
                         do list.add(n_packs,comp)
                     }
-                    if @count(n_packs)>0{ do generar_lista(n_packs,catalog,lista) }
+                    if @count(n_packs)>0
+                    {
+                        @iterations=@iterations+1
+                        do generar_lista(n_packs,catalog,lista)
+                    }
                     do list.clear(n_packs)
                 }
             }
         }
-        
-       
     }
 
     merge_args::
