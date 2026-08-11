@@ -529,15 +529,22 @@ module
                         const editables = document.querySelectorAll("edit-table");
                         for(let i = 0; i < editables.length; i++){
                             const table = editables[i];
-                            let titles = table.Columns.map(o => o.title);
-                            let fields = table.Columns.map(o => o.field);
+                            let titles = [];
+                            let fields = [];
+
+                            table.Columns.forEach(c => {
+                                if (!["hide-on-print","no-print"].includes(c.class)) {
+                                    titles.push(c.title);
+                                    fields.push(c.field);
+                                }
+                            });
 
                             csv.push(titles.join(","));
                             for(let j = 0; j < table.DataArray.length; j++){
                                 let item = table.DataArray[j];
                                 let row = [];
                                 fields.forEach(f => {
-                                    let cellValue = item[f].toString();
+                                    let cellValue = item[f]?.toString() ?? "";
                                     // Reemplazar caracteres que rompan la secuencia csv
                                     if (cellValue.includes(\'"\')) { cellValue = cellValue.replaceAll(\'"\',"&quot;") }
                                     if (cellValue.includes("\'")) { cellValue = cellValue.replaceAll("\'","&apos;") }
@@ -552,7 +559,7 @@ module
                         if (clipboard) {
                             // Copiar datos csv al portapapeles
                             navigator.clipboard.writeText(csv.join("\\n"))
-                            .then(() => { console.log("Se copio al portapapeles.") })
+                            .then(() => { alert("Se copió al portapapeles.") })
                             .catch(() => { alert("Error al copiar.") });
                         }
                         else {
