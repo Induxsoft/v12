@@ -92,7 +92,8 @@ module ""
     {
         packs=trim(@@(params,"$packs"))
         cmd = ftext('deployv12 packs="#<packs>" -hide-log')
-        res = exec(@devkron,cmd,@true)
+        // res = exec(@devkron,cmd,@true)
+        res=_exec(@devkron,cmd,@true,@exec_timeout,@false)
     }
     install_pakcs::&db,&params
     {
@@ -101,7 +102,7 @@ module ""
         if qname ==""{qname=dbr.full_qname(db)}
 
         cmd = ftext('installv12 db="#<qname>" packs="#<packs>" -hide-log')
-        res = exec(@devkron,cmd,@false)
+        res=_exec(@devkron,cmd,@true,@exec_timeout,@false)
     }
     ref @buffer=text.create()
     Log::txt
