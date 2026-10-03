@@ -50,8 +50,11 @@ module
         show_tree = parse.bool(@@(table_definition,"$show-tree"))
         tree_opt = ''
         expanded = @false
+        pagination = not(show_tree) && parse.bool(@@(table_definition,"$pagination"))
+        rows_per_page = field.dnum(table_definition,"rows_per_page",250)
 
-        if show_tree {
+        if show_tree
+        {
             keyfield = field.dstr(treeopt,"key","sys_pk")
             parentkey = field.dstr(treeopt,"parentkey","parent")
             childsfield = field.dstr(treeopt,"childs-field","__items")
@@ -73,18 +76,21 @@ module
         {
             div(style="overflow-y:auto; max-height:#<tableHeight>;" id="list_table_container")
             {
-                "edit-table"(id="#<table_id>" data='#<to.json(datatable)>' "#<tree_opt>"=""
-                "hidde-selector"="true" "cards-responsive"="true" style="width:100%;"
-                "control-styles"="
-                    div:has(table##<table_id>) { overflow:revert !important; }
-                    ##<table_id> tr th { font-weight:500; }
+                "edit-table"(
+                    id="#<table_id>"
+                    "#<ifstr(show_tree || pagination, '', 'data')>"='#<to.json(datatable)>'
+                    "#<tree_opt>"=""
+                    "hidde-selector"="true" "cards-responsive"="true" style="width:100%;"
+                    "control-styles"="
+                        div:has(table##<table_id>) { overflow:revert !important; }
+                        ##<table_id> tr th { font-weight:500; }
                     
-                    @media print {
-                        ##<table_id> { overflow:hidden; }
-                    }
+                        @media print {
+                            ##<table_id> { overflow:hidden; }
+                        }
 
-                    #<control_styles>
-                "
+                        #<control_styles>
+                    "
                 )
                 {
                     "edit-thead"
@@ -137,16 +143,22 @@ module
             if lenght <= 0 {
                 #$ div(class="text-center" id="msg_#<table_id>") { h6(style="background-color:#F5F5F5; padding: 10rem 0;"){"Sin resultados"} }
             }
-            #! else {
+            #!
+            else {
                 #$ small(class="text-secondary hide-on-print" id="#<table_id>_leyend"){$"#<replace(tableLeyend,'#',lenght)>"}
             }
-
-            script(type="text/javascript")
+            #!
+            if pagination {
+                #$ div(id="#<table_id>_pagination" class="d-flex justify-content-center align-items-center gap-1 py-2"){""}
+            }
+            #$
+            
+            script(type="text/javascript" id="uie.dbeditable-script")
             {$'
-                document.addEventListener("DOMContentLoaded", ()=> {
-                    // const work_area = document.getElementById("work_area");
-                    // const list_cont = document.getElementById("list_table_container");
+                document.addEventListener("DOMContentLoaded", () => {
                     const table = document.getElementById("#<table_id>");
+                    const data = #<to.json(datatable)>;
+                    const pages = {};
                     
                     if (table)
                     {
@@ -154,11 +166,143 @@ module
                         table.AutoDelRow = false;
                         table.EverMove = false;
                         
-                        if (#<show_tree>) {
+                        // Vista con filas anidadas
+                        if (#<show_tree>)
+                        {
                             table.removeAttribute("data");
-                            table.DataArray = #<to.json(datatable)>;
+                            table.DataArray = data;
                             table._expandOnStart = #<expanded>;
                             table._printTreeData();
+                        }
+                        // Paginación
+                        if (#<pagination>)
+                        {
+                            let perPage = #<rows_per_page>
+                            let numItems = data.length
+                            let numPages = Math.ceil(numItems / perPage)
+                            let currentPage = 1
+
+                            for (let i = 0; i < numItems; i += perPage) {
+                                pages[Object.keys(pages).length + 1] = data.slice(i, i + perPage)
+                            }
+
+                            const renderPagination = () =>
+                            {
+                                const container = document.getElementById("#<table_id>_pagination")
+
+                                if (!container || numPages <= 1) return
+
+                                let html = ""
+
+                                html += `
+                                    <button type="button"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        ${currentPage === 1 ? "disabled" : ""}
+                                        onclick="pagination.goto(${currentPage - 1})">
+                                        &lt;
+                                    </button>
+                                `
+
+                                if (numPages <= 5)
+                                {
+                                    for (let page = 1; page <= numPages; page++)
+                                    {
+                                        html += `
+                                            <button type="button"
+                                                class="btn btn-sm ${page === currentPage ? "btn-secondary" : "btn-outline-secondary"}"
+                                                onclick="pagination.goto(${page})">
+                                                ${page}
+                                            </button>
+                                        `
+                                    }
+                                }
+                                else
+                                {
+                                    html += `
+                                        <button type="button"
+                                            class="btn btn-sm ${currentPage === 1 ? "btn-secondary" : "btn-outline-secondary"}"
+                                            onclick="pagination.goto(1)">
+                                            1
+                                        </button>
+                                    `
+
+                                    if (currentPage > 3)
+                                        html += `<span class="px-1">...</span>`
+
+                                    let start = Math.max(2, currentPage - 1)
+                                    let end = Math.min(numPages - 1, currentPage + 1)
+
+                                    if (currentPage <= 3)
+                                    {
+                                        start = 2
+                                        end = 3
+                                    }
+
+                                    if (currentPage >= numPages - 2)
+                                    {
+                                        start = numPages - 2
+                                        end = numPages - 1
+                                    }
+
+                                    for (let page = start; page <= end; page++)
+                                    {
+                                        html += `
+                                            <button type="button"
+                                                class="btn btn-sm ${page === currentPage ? "btn-secondary" : "btn-outline-secondary"}"
+                                                onclick="pagination.goto(${page})">
+                                                ${page}
+                                            </button>
+                                        `
+                                    }
+
+                                    if (currentPage < numPages - 2)
+                                        html += `<span class="px-1">...</span>`
+
+                                    html += `
+                                        <button type="button"
+                                            class="btn btn-sm ${currentPage === numPages ? "btn-secondary" : "btn-outline-secondary"}"
+                                            onclick="pagination.goto(${numPages})">
+                                            Último
+                                        </button>
+                                    `
+                                }
+
+                                html += `
+                                    <button type="button"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        ${currentPage === numPages ? "disabled" : ""}
+                                        onclick="pagination.goto(${currentPage + 1})">
+                                        &gt;
+                                    </button>
+                                `
+
+                                container.innerHTML = html
+                            }
+
+                            window.pagination = {
+                                goto: (numPage) =>
+                                {
+                                    if (numPage < 1 || numPage > numPages) return
+                                    
+                                    const leyend = document.getElementById("#<table_id>_leyend")
+                                    currentPage = numPage
+
+                                    table.DataArray = pages[numPage] ?? []
+                                    if (leyend)
+                                    {
+                                        let start = (numPage - 1) * perPage
+                                        let end = start + table.DataArray.length
+                                        let text = "Mostrando registros: " + start +" a "+ end +" de "+ numItems
+                                        leyend.textContent = text
+                                    }
+                                    table._printRows()
+
+                                    renderPagination()
+                                }
+                            }
+
+                            table.removeAttribute("data")
+                            pagination.goto(1)
                         }
 
                         table.Events[table.EdiTable.Const.Events.OnSort] = (e) =>
