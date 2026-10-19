@@ -122,6 +122,9 @@ qname = trim(@@(args,"$db"))
 if qname == "" { qname = trim(@@(args,"$bd")) }
 if qname == "" { do rise_error(99,"Debe de indicar un nombre cualificado de conexión `db`.") }
 
+// set.version (dbm.dkl) busca los manifiestos en _deployed/<md5 de la fuente oficial>; usar la fuente indicada en from=
+if trim(@@(args,"$from")) != "" { @path_deployed_md5 = "_deployed/"+md5(trim(@@(args,"$from")))+"/" }
+
 categories_file = path.concat(path_app_info,"sys_app_category.csv")
 catalogs_file = path.concat(path_app_info,"sys_app_catalog.csv")
 shortcuts_file = path.concat(path_app_info,"sys_app_shortcut.csv")
