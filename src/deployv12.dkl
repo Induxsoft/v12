@@ -110,6 +110,158 @@ program "Deployment"
         return a
     }
 
+    // ---- Dependencias entre paquetes ("requires" en pack.manifest, T001) ----
+
+    do _map_function(-1, "System.IO.Directory", "Delete", "dir.rdelete", "System.String, System.Boolean", "void")
+
+    zip.nombre::url
+    {
+        return tolower(file.justname(url))
+    }
+
+    ver.seg::&s,i
+    {
+        if i>=@count(s) { return 0 }
+        return parse.num(trim(list.str(s,i)))
+
+        exception { return 0 }
+    }
+
+    ver.cumple::v,minimo
+    {
+        // @true si la versión v es mayor o igual que minimo, comparando por segmentos numéricos
+        ref a=split(trim(v),".")
+        ref b=split(trim(minimo),".")
+        n=@count(a)
+        if @count(b)>n { n=@count(b) }
+        for i=0;i<n
+        {
+            x=ver.seg(a,i)
+            y=ver.seg(b,i)
+            if x>y { return @true }
+            if x<y { return @false }
+        }
+        return @true
+    }
+
+    req.lista::&m
+    {
+        // Normaliza "requires" (forma de objeto y forma corta) a registros {id, min_version, min_schema_ver}
+        ref r=list.create()
+        if isnull(m) { return r }
+        if not(field.exist(m,"requires")) { return r }
+        ref rq=@@(m,"&requires")
+        if isnull(rq) { return r }
+        for i=0;i<@count(rq)
+        {
+            ref e=list.obj(rq,i)
+            id=trim(@@(e,"$id"))
+            if id=="" { id=trim(list.str(rq,i)) }
+            if id!=""
+            {
+                new x
+                {
+                    @"id":tolower(id)
+                    @"min_version":trim(@@(e,"$min_version"))
+                    @"min_schema_ver":trim(@@(e,"$min_schema_ver"))
+                }
+                do list.add(r,x)
+            }
+        }
+        return r
+    }
+
+    zips.de::id,&catalog
+    {
+        // Resuelve un id de paquete a las url de sus zips con el catálogo
+        ref p=list.create()
+        ref l=list.create()
+        do list.add(p,id)
+        @iterations=0
+        do generar_lista(p,catalog,l)
+        return l
+    }
+
+    zip.manifiesto::zip_file
+    {
+        // Lee el pack.manifest de un zip descomprimiéndolo en una carpeta temporal
+        tmp=path.concat(@md5_repo,"_requires")
+        if dir.exists(tmp) { do dir.rdelete(tmp,@true) }
+        do dir.ensure(tmp)
+        do unzip(zip_file,tmp,@true)
+        f=path.concat(tmp,"pack.manifest")
+        ref m=@null
+        if file.exists(f) { ref m=from.json(file.rtext(f)) }
+        do dir.rdelete(tmp,@true)
+        return m
+    }
+
+    paquete.info::zip,zip_file
+    {
+        // Manifiesto de un paquete: la entrada de manifest.json de la fuente si trae "requires"; si no, el pack.manifest del zip
+        ref m=@null
+        id=@@(@zip_id,"$"+zip)
+        if id!="" { ref m=@@(@mf,"&"+id) }
+        if not(isnull(m))
+        {
+            if field.exist(m,"requires") { return m }
+        }
+        if not(file.exists(zip_file)) { return m }
+        ref mz=zip.manifiesto(zip_file)
+        if isnull(mz) { return m }
+        return mz
+    }
+
+    paquete.id::zip
+    {
+        id=trim(@@(@info,"$"+zip+"/id"))
+        if id=="" { id=@@(@zip_id,"$"+zip) }
+        if id=="" { id=zip }
+        return id
+    }
+
+    descargar::url,temp_file
+    {
+        if not(@from_local) || not(file.exists(temp_file))
+        {
+            if file.exists(temp_file){ do file.delete(temp_file) }
+            do print ("Descargando: "+file.justname(url)+"...")
+            do http.download(url,temp_file)
+            do print("Descargado.")
+        }
+    }
+
+    visitar::zip
+    {
+        // Recorrido en profundidad: deja las dependencias antes que quien las requiere y conserva el orden recibido
+        if @ciclo!="" { return }
+        if not(field.exist(@grafo,zip)) { return }
+        e=@@(@estado,"#"+zip)
+        if e==2 { return }
+        if e==1
+        {
+            c=""
+            dentro=@false
+            for i=0;i<@count(@pila)
+            {
+                if list.str(@pila,i)==zip { dentro=@true }
+                if dentro { c=c+paquete.id(list.str(@pila,i))+" -> " }
+            }
+            @ciclo=c+paquete.id(zip)
+            return
+        }
+        @estado<zip>:1
+        do list.add(@pila,zip)
+        ref deps=@@(@grafo,"&"+zip)
+        for i=0;i<@count(deps)
+        {
+            do visitar(list.str(deps,i))
+        }
+        do list.del(@pila,@count(@pila)-1)
+        @estado<zip>:2
+        do list.add(@orden,zip)
+    }
+
     @source_url="https://install-v12.induxsoft.net/"
     @cat_file="catalog.json"
     @file_ext=".zip"
@@ -165,20 +317,156 @@ program "Deployment"
     ref lista=list.create()
     
     do generar_lista(packs,catalog,lista)
-    
+
+    //Dependencias (requires): agregar las que falten, verificar min_version, detectar ciclos y ordenar
+    @md5_repo=md5_repo
+    ref @mf=record.create()
+    codeblock
+    {
+        ref @mf=from.json(http.get(@source_url+"manifest.json"))
+        if isnull(@mf) { ref @mf=record.create() }
+        exception { ref @mf=record.create() }
+    }
+    ref @zip_id=record.create()
+    ref ids=list.create_from_fields(@mf)
+    for i=0;i<@count(ids)
+    {
+        ref zl=zips.de(list.str(ids,i),catalog)
+        if @count(zl)==1 { @zip_id<zip.nombre(list.str(zl,0))>:list.str(ids,i) }
+    }
+
+    ref @grafo=record.create()
+    ref @info=record.create()
+    ref omitir=record.create()
+    ref aristas=list.create()
+    ref nodos=list.create()
+    for i=0;i<@count(lista)
+    {
+        do list.add(nodos,list.str(lista,i))
+    }
+
+    i=0
+    while i<@count(nodos)
+    {
+        url=list.str(nodos,i)
+        zip=zip.nombre(url)
+        if @@(omitir,"#"+zip)==1
+        {
+            //Ya desplegado desde esta fuente: sus requires se leen del manifiesto desplegado
+            ref m=from.json(file.rtext(path.concat(md5_repo,zip+".manifest")))
+        }
+        else
+        {
+            temp_file=path.concat(md5_repo,file.name(url))
+            do descargar(url,temp_file)
+            ref m=paquete.info(zip,temp_file)
+        }
+        if not(isnull(m)) { @info<zip+"*">:m }
+        ref deps=list.create()
+        @grafo<zip+"*">:deps
+
+        ref rq=req.lista(m)
+        for j=0;j<@count(rq)
+        {
+            ref r=list.obj(rq,j)
+            ref rz=zips.de(@@(r,"$id"),catalog)
+            for k=0;k<@count(rz)
+            {
+                r_url=list.str(rz,k)
+                r_zip=zip.nombre(r_url)
+                do list.add(deps,r_zip)
+                new a
+                {
+                    @"de":zip
+                    @"a":r_zip
+                    @"id":@@(r,"$id")
+                    @"min_version":@@(r,"$min_version")
+                }
+                do list.add(aristas,a)
+
+                m_dep=path.concat(md5_repo,r_zip+".manifest")
+                desplegado=file.exists(m_dep)
+                if desplegado && @@(r,"$min_version")!=""
+                {
+                    ref md=from.json(file.rtext(m_dep))
+                    desplegado=ver.cumple(@@(md,"$version"),@@(r,"$min_version"))
+                }
+
+                if not(is_inlist(nodos,r_url))
+                {
+                    do list.add(nodos,r_url)
+                    if desplegado { omitir<r_zip>:1 }
+                    else { do print("Se agregó "+@@(r,"$id")+" porque lo requiere "+paquete.id(zip)) }
+                }
+                else if @@(omitir,"#"+r_zip)==1 && not(desplegado)
+                {
+                    omitir<r_zip>:0
+                    do print("Se agregó "+@@(r,"$id")+" porque lo requiere "+paquete.id(zip)+" (la versión desplegada no cumple el mínimo)")
+                }
+            }
+        }
+        i=i+1
+    }
+
+    //min_version contra lo que hay en la fuente
+    errores=""
+    for i=0;i<@count(aristas)
+    {
+        ref a=list.obj(aristas,i)
+        minimo=@@(a,"$min_version")
+        if minimo!="" && @@(omitir,"#"+@@(a,"$a"))!=1
+        {
+            v=trim(@@(@info,"$"+@@(a,"$a")+"/version"))
+            if v=="" || not(ver.cumple(v,minimo))
+            {
+                if v=="" { v="(sin versión)" }
+                errores=errores+"\t"+paquete.id(@@(a,"$de"))+" requiere "+@@(a,"$id")+" >= "+minimo+"; la fuente tiene "+v+"\n"
+            }
+        }
+    }
+    if errores!=""
+    {
+        do print("ERROR: no se cumplen versiones mínimas (min_version). No se desplegó nada.")
+        do print(errores)
+        return
+    }
+
+    //Orden: dependencias primero; entre paquetes sin relación, el orden recibido
+    @ciclo=""
+    ref @estado=record.create()
+    ref @pila=list.create()
+    ref @orden=list.create()
+    for i=0;i<@count(nodos)
+    {
+        do visitar(zip.nombre(list.str(nodos,i)))
+    }
+    if @ciclo!=""
+    {
+        do print("ERROR: hay un ciclo de dependencias (requires): "+@ciclo)
+        do print("No se desplegó nada.")
+        return
+    }
+
+    ref lista=list.create()
+    for i=0;i<@count(@orden)
+    {
+        z=list.str(@orden,i)
+        if @@(omitir,"#"+z)!=1
+        {
+            for j=0;j<@count(nodos)
+            {
+                if zip.nombre(list.str(nodos,j))==z { do list.add(lista,list.str(nodos,j)) }
+            }
+        }
+    }
+
     //Descargar, descomprimir y eliminar archivo zip
     for i=0;i<@count(lista)
     {
         url=list.str(lista,i)
         temp_file=path.concat(md5_repo,file.name(list.str(lista,i)))
-        
-        if not(@from_local) || not(file.exists(temp_file))
-        {
-            if file.exists(temp_file){ do file.delete(temp_file) }
-            do print ("Descargando: "+file.justname(url)+"...")
-            do http.download(url,temp_file)
-            do print("Descargado.")
-        }
+
+        if not(file.exists(temp_file)) { do descargar(url,temp_file) }
         do print("Descomprimiendo "+file.name(temp_file)+"...")
         if file.exists("pack.manifest") { do file.delete("pack.manifest") }
         do unzip(temp_file,"./",@true)
