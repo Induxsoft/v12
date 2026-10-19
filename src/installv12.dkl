@@ -4,6 +4,7 @@ program "InstallV12"
 {
     #include "functions.dkh"
     #include "serialize.dkh"
+    #include "dbr.dkh"
 
     print_error::err
     {
@@ -21,6 +22,7 @@ program "InstallV12"
         do print("Opcionalmente puede indicar también los argumentos para que pueda detectarse información de catálogo de los paquetes desplegados si ha usado otros repositorios que no son de Induxsoft:")
         do print("\tfrom=<url_de_repositorio>/ (Siempre termine la url con /)")
         do print("\tcat=<nombre del archivo de catálogo>")
+        do print("\tforce (instala aunque falten dependencias declaradas en requires o no cumplan min_schema_ver)")
         do print("")
         do print('* Use comillas dobles " para encerrar los argumentos *')
         do print("")
@@ -121,15 +123,285 @@ program "InstallV12"
         
     }
 
+    // ---- Dependencias entre paquetes ("requires" en pack.manifest, T001) ----
+
+    ver.seg::&s,i
+    {
+        if i>=@count(s) { return 0 }
+        return parse.num(trim(list.str(s,i)))
+
+        exception { return 0 }
+    }
+
+    ver.cumple::v,minimo
+    {
+        // @true si la versión v es mayor o igual que minimo, comparando por segmentos numéricos
+        ref a=split(trim(v),".")
+        ref b=split(trim(minimo),".")
+        n=@count(a)
+        if @count(b)>n { n=@count(b) }
+        for i=0;i<n
+        {
+            x=ver.seg(a,i)
+            y=ver.seg(b,i)
+            if x>y { return @true }
+            if x<y { return @false }
+        }
+        return @true
+    }
+
+    req.lista::&m
+    {
+        // Normaliza "requires" (forma de objeto y forma corta) a registros {id, min_version, min_schema_ver}
+        ref r=list.create()
+        if isnull(m) { return r }
+        if not(field.exist(m,"requires")) { return r }
+        ref rq=@@(m,"&requires")
+        if isnull(rq) { return r }
+        for i=0;i<@count(rq)
+        {
+            ref e=list.obj(rq,i)
+            id=trim(@@(e,"$id"))
+            if id=="" { id=trim(list.str(rq,i)) }
+            if id!=""
+            {
+                new x
+                {
+                    @"id":tolower(id)
+                    @"min_version":trim(@@(e,"$min_version"))
+                    @"min_schema_ver":trim(@@(e,"$min_schema_ver"))
+                }
+                do list.add(r,x)
+            }
+        }
+        return r
+    }
+
+    zips.de::id,&catalog
+    {
+        // Resuelve un id de paquete a los nombres de sus zips con el catálogo
+        ref p=list.create()
+        ref l=list.create()
+        ref r=list.create()
+        do list.add(p,id)
+        @iterations=0
+        do generar_lista(p,catalog,l)
+        for i=0;i<@count(l)
+        {
+            do list.add(r,file.justname(trim(list.str(l,i))))
+        }
+        return r
+    }
+
+    manifiesto.desplegado::zip
+    {
+        m_file=path.concat(@md5_repo,zip+".manifest")
+        if not(file.exists(m_file)) { return @null }
+        return from.json(file.rtext(m_file))
+    }
+
+    sys_pack.schema::id,&m
+    {
+        // schema_ver instalado (sys_packs) del paquete id o de alguna de sus carpetas installable; "-" si no está instalado
+        if isnull(@db) { return "-" }
+        ref c=list.create()
+        do list.add(c,id)
+        if not(isnull(m))
+        {
+            ref inst=@@(m,"&installable")
+            if not(isnull(inst))
+            {
+                for i=0;i<@count(inst)
+                {
+                    do list.add(c,trim(list.str(inst,i)))
+                }
+            }
+        }
+        for i=0;i<@count(c)
+        {
+            new prm
+            {
+                @"pack":list.str(c,i)
+            }
+            ref r=dbr.rec(@db,"SELECT `schema_ver` AS sv FROM sys_packs WHERE pack=@pack",prm)
+            if not(isnull(r))
+            {
+                if field.exist(r,"sv")
+                {
+                    v=trim(@@(r,"$sv"))
+                    if v=="" { v="0" }
+                    return v
+                }
+            }
+        }
+        return "-"
+
+        exception { return "-" }
+    }
+
+    paquete.id::nodo
+    {
+        id=trim(@@(@nodos_info,"$"+nodo+"/id"))
+        if id=="" { id=nodo }
+        return id
+    }
+
+    visitar::nodo
+    {
+        // Recorrido en profundidad: deja las dependencias antes que quien las requiere y conserva el orden recibido
+        if @ciclo!="" { return }
+        e=@@(@estado,"#"+nodo)
+        if e==2 { return }
+        if e==1
+        {
+            c=""
+            dentro=@false
+            for i=0;i<@count(@pila)
+            {
+                if list.str(@pila,i)==nodo { dentro=@true }
+                if dentro { c=c+paquete.id(list.str(@pila,i))+" -> " }
+            }
+            @ciclo=c+paquete.id(nodo)
+            return
+        }
+        @estado<nodo>:1
+        do list.add(@pila,nodo)
+        ref deps=@@(@grafo,"&"+nodo)
+        if not(isnull(deps))
+        {
+            for i=0;i<@count(deps)
+            {
+                do visitar(list.str(deps,i))
+            }
+        }
+        do list.del(@pila,@count(@pila)-1)
+        @estado<nodo>:2
+        do list.add(@orden,nodo)
+    }
+
+    dependencias::&nodos,&catalog
+    {
+        // Cierra el conjunto con los requires de los manifiestos desplegados, verifica y devuelve los nodos ordenados (o @null si hay que detenerse)
+        ref aristas=list.create()
+        faltan=""
+        errores=""
+        i=0
+        while i<@count(nodos)
+        {
+            nodo=list.str(nodos,i)
+            ref deps=list.create()
+            @grafo<nodo+"*">:deps
+            ref rq=req.lista(@@(@nodos_info,"&"+nodo))
+            for j=0;j<@count(rq)
+            {
+                ref r=list.obj(rq,j)
+                r_id=@@(r,"$id")
+                minimo=@@(r,"$min_schema_ver")
+                ref rz=zips.de(r_id,catalog)
+                for k=0;k<@count(rz)
+                {
+                    r_zip=list.str(rz,k)
+                    if not(is_inlist(nodos,r_zip))
+                    {
+                        ref md=manifiesto.desplegado(r_zip)
+                        sv=sys_pack.schema(r_id,md)
+                        instalado=sv!="-"
+                        if instalado && minimo!="" { instalado=ver.cumple(sv,minimo) }
+                        if not(instalado)
+                        {
+                            desplegado=not(isnull(md))
+                            if desplegado && minimo!="" { desplegado=ver.cumple(@@(md,"$schema_ver"),minimo) }
+                            if desplegado
+                            {
+                                do list.add(nodos,r_zip)
+                                @nodos_info<r_zip+"*">:md
+                                do list.add(deps,r_zip)
+                                do print("Se incluye "+r_id+" porque lo requiere "+paquete.id(nodo)+" (está desplegado y no instalado)")
+                            }
+                            else
+                            {
+                                if minimo!="" && sv!="-" { errores=errores+"\t"+paquete.id(nodo)+" requiere "+r_id+" con schema_ver >= "+minimo+"; instalado: "+sv+"\n" }
+                                else if minimo!="" && not(isnull(md)) { errores=errores+"\t"+paquete.id(nodo)+" requiere "+r_id+" con schema_ver >= "+minimo+"; desplegado: "+@@(md,"$schema_ver")+"\n" }
+                                else { errores=errores+"\t"+paquete.id(nodo)+" requiere "+r_id+", que no está instalado ni desplegado\n" }
+                                if not(is_inlist(@faltantes,r_id)) { do list.add(@faltantes,r_id) }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        do list.add(deps,r_zip)
+                        if minimo!=""
+                        {
+                            v=trim(@@(@nodos_info,"$"+r_zip+"/schema_ver"))
+                            if v=="" || not(ver.cumple(v,minimo))
+                            {
+                                errores=errores+"\t"+paquete.id(nodo)+" requiere "+r_id+" con schema_ver >= "+minimo+"; desplegado: "+v+"\n"
+                                if not(is_inlist(@faltantes,r_id)) { do list.add(@faltantes,r_id) }
+                            }
+                        }
+                    }
+                }
+            }
+            i=i+1
+        }
+
+        if errores!=""
+        {
+            do print("")
+            do print("Dependencias (requires) que no se cumplen:")
+            do print(errores)
+            cmd='./dkl deployv12 "packs='
+            for i=0;i<@count(@faltantes)
+            {
+                if i>0 { cmd=cmd+"," }
+                cmd=cmd+list.str(@faltantes,i)
+            }
+            cmd=cmd+'"'
+            if @from_arg!="" { cmd=cmd+' "from='+@source_url+'" "cat='+@cat_file+'"' }
+            do print("Despliéguelas antes con:")
+            do print("\t"+cmd)
+            do print("y vuelva a ejecutar installv12 (se incluirán automáticamente).")
+            if not(@force)
+            {
+                do print("No se instaló nada (use force para instalar de todos modos).")
+                return @null
+            }
+            do print("ADVERTENCIA: se continúa por force.")
+            do print("")
+        }
+
+        //Orden: dependencias primero; entre paquetes sin relación, el orden recibido
+        @ciclo=""
+        ref @estado=record.create()
+        ref @pila=list.create()
+        ref @orden=list.create()
+        for i=0;i<@count(nodos)
+        {
+            do visitar(list.str(nodos,i))
+        }
+        if @ciclo!=""
+        {
+            do print("ERROR: hay un ciclo de dependencias (requires): "+@ciclo)
+            do print("No se instaló nada.")
+            return @null
+        }
+        return @orden
+    }
+
     analisis_catalogo::&op
     {
         md5_repo="_deployed/"+md5(@source_url)
+        @md5_repo=md5_repo
         c_f=path.concat(md5_repo,@cat_file)
         if not(file.exists(c_f)) { return op }
 
         ref np=list.create()
         ref catalog=from.json(file.rtext(c_f))
 
+        //Nodos en el orden recibido: zips del catálogo (con su manifiesto desplegado) o carpetas
+        ref nodos=list.create()
+        ref @nodos_info=record.create()
+        ref carpetas=record.create()
         for i=0;i<@count(op)
         {
             p=trim(list.str(op,i))
@@ -139,43 +411,62 @@ program "InstallV12"
                 ref lista=list.create()
                 do list.add(packs,p)
                 do generar_lista(packs,catalog,lista)
-                if @count(lista)<1 && not(is_inlist(np,p)) { do list.add(np,p) }
+                if @count(lista)<1 && not(is_inlist(nodos,p))
+                {
+                    do list.add(nodos,p)
+                    carpetas<p>:1
+                }
                 else
                 {
-                    ref lf=list.create()
                     for j=0;j<@count(lista) 
                     { 
                         itm=trim(list.str(lista,j))
                         if itm!=""
                         {
                             itm=file.justname(itm)
-                            m_file=path.concat(md5_repo,itm+".manifest")
-                            if file.exists(m_file)
+                            if not(is_inlist(nodos,itm))
                             {
-                                ref m=from.json(file.rtext(m_file))
-                                if field.exist(m,"installable")
-                                {
-                                    if @count(@@(m,"&installable"))<1 { do list.add(np,itm) }
-                                    else
-                                    {
-                                        for k=0;k<@count(@@(m,"&installable"))
-                                        {
-                                            fi=trim(list.str(@@(m,"&installable"),k))
-                                            if fi!="" { do list.add(np,fi) }
-                                        }
-                                    }
-                                }
-                                else { do list.add(np,itm) }
+                                do list.add(nodos,itm)
+                                ref m=manifiesto.desplegado(itm)
+                                if not(isnull(m)) { @nodos_info<itm+"*">:m }
                             }
-                            else if not(is_inlist(np,itm)) { do list.add(np,itm) }
                         }
                     }
                 }
             }
-            else
+            else if not(is_inlist(nodos,p))
             {
-                do list.add(np,p)
+                do list.add(nodos,p)
+                carpetas<p>:1
             }
+        }
+
+        ref orden=dependencias(nodos,catalog)
+        if isnull(orden) { return @null }
+
+        //Carpetas a instalar, en orden
+        for i=0;i<@count(orden)
+        {
+            itm=list.str(orden,i)
+            ref m=@@(@nodos_info,"&"+itm)
+            if @@(carpetas,"#"+itm)==1 { do list.add(np,itm) }
+            else if not(isnull(m))
+            {
+                if field.exist(m,"installable")
+                {
+                    if @count(@@(m,"&installable"))<1 { do list.add(np,itm) }
+                    else
+                    {
+                        for k=0;k<@count(@@(m,"&installable"))
+                        {
+                            fi=trim(list.str(@@(m,"&installable"),k))
+                            if fi!="" { do list.add(np,fi) }
+                        }
+                    }
+                }
+                else { do list.add(np,itm) }
+            }
+            else if not(is_inlist(np,itm)) { do list.add(np,itm) }
         }
 
         return np
@@ -199,7 +490,20 @@ program "InstallV12"
     if trim(@@(args,"$prg"))!="" { @install_program=trim(@@(args,"$prg"))}
     if trim(@@(args,"$fld"))!="" { @install_folder=trim(@@(args,"$fld"))}
 
+    @from_arg=trim(@@(args,"$from"))
+    @force=field.exist(args,"force") || field.exist(args,"-force")
+    ref @faltantes=list.create()
+    ref @grafo=record.create()
+    ref @db=@null
+    codeblock
+    {
+        ref @db=dbr.open(trim(@@(args,"$db")))
+        exception { ref @db=@null }
+    }
+
     ref packs= analisis_catalogo(packs)
+    if not(isnull(@db)) { do dbr.close(@db) }
+    if isnull(packs) { return }
 
     ref lista_programas=list.create()
 
