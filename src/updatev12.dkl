@@ -91,7 +91,9 @@ module ""
     deploy_packs::&params
     {
         packs=trim(@@(params,"$packs"))
-        cmd = ftext('deployv12 packs="#<packs>" -hide-log')
+        src_url=@source_url
+        cat_f=@cat_file
+        cmd = ftext('deployv12 packs="#<packs>" from="#<src_url>" cat="#<cat_f>" -hide-log')
         // res = exec(@devkron,cmd,@true)
         res=_exec(@devkron,cmd,@true,@exec_timeout,@false)
     }
@@ -100,8 +102,10 @@ module ""
         packs=trim(@@(params,"$packs"))
         qname=trim(@@(params,"$qname"))
         if qname ==""{qname=dbr.full_qname(db)}
+        src_url=@source_url
+        cat_f=@cat_file
 
-        cmd = ftext('installv12 db="#<qname>" packs="#<packs>" -hide-log')
+        cmd = ftext('installv12 db="#<qname>" packs="#<packs>" from="#<src_url>" cat="#<cat_f>" -hide-log')
         res=_exec(@devkron,cmd,@true,@exec_timeout,@false)
     }
     ref @buffer=text.create()
@@ -147,6 +151,7 @@ module ""
     @path_log=@path_log+parse.qname(qname)+"_"+date_str(now(),"yyyy-MM-dd")+".log"
 
     if trim(@@(args,"$from"))!="" { @source_url=trim(@@(args,"$from")) }
+    if trim(@@(args,"$cat"))!="" { @cat_file=trim(@@(args,"$cat")) }
     if trim(@@(args,"$path_dkl")) != ""{@devkron=trim(@@(args,"$path_dkl"))}
 
     args<"qname">:qname
@@ -234,6 +239,13 @@ module ""
                 {
                     id_pack=id_pack+","+ids_packs
                 }
+            }
+            else
+            {
+                //Nunca se desplegó desde esta fuente: la versión local es desconocida
+                do Log(">> Sin despliegues desde esta fuente: versión local desconocida")
+                @deploy_pack=not(isnull(@manifiesto))
+                @install_pack=@deploy_pack
             }
         }
         else
