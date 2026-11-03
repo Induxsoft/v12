@@ -1,0 +1,55 @@
+{
+  "template": "v12-content-site",
+  "version": "1.0.234",
+  "files": [
+    {
+      "path": "_protected/auth.dk",
+      "sha256": "cc834b5e8a444997319a6c5b184d9f3730679bd3cbc12462377033d52c9ee793",
+      "history": [
+        "46be9f6250276ccc837f51d8316ff08b63d14a57e15c538459ad91730e4b69a7"
+      ]
+    },
+    {
+      "path": "_protected/ext.map",
+      "sha256": "8a1d7dcb2ab48e71517d79ccc50b9a2961d11a52724a0efa5945bfc7fa01b5e6",
+      "history": [
+        "e2f50f01a10a3d4e51427d7aa8981b4c36da705defbcf491eed224e3e378d357"
+      ]
+    },
+    {
+      "path": "_protected/idp/db_idp_v12.dk",
+      "sha256": "89744af1de57a8544f94f8db031793c8895235b16d88b61f459aaa9b7ed3d014",
+      "history": [
+        "5b3aa479ba2f6ce7563aea678e493badb6a75958a168674a336b3adba711def4",
+        "7bc149850d866fe223d1f3bfae65b05d6c84df2f930dfdeab004f75de39bacb7",
+        "809c2a199619301fae262477f9457842190610db7649f925a0aa2d6130750545"
+      ]
+    },
+    {
+      "path": "_protected/paths.map",
+      "sha256": "7a2be9065262ba94b3cac7fc26c743bf8ed4f9fd6ab196151ce9b208a2ea4316",
+      "history": []
+    },
+    {
+      "path": "_protected/routes.map",
+      "sha256": "a70c1bca19e39e0a86fe73acc36effa36e4c2c6b99cc4a74c2ebbc1e55bb5a37",
+      "history": [
+        "17be6197d67aadd92b15ea021114909db0318112e4e95dbe04b8bce442426279"
+      ]
+    },
+    {
+      "path": "_protected/routing.dk",
+      "sha256": "7ad4d0ecd91056eb6e4e25737895bc643b1b228203f2cfbf3cef4278e02b16d3",
+      "history": [
+        "04e1143db252f621c0c15f3257684765974ae6b8a483ca393dc30eee5be5832a"
+      ]
+    },
+    {
+      "path": "index.dkl",
+      "sha256": "1ca11b8df35b703667eaefd4df947f699b44f6ced7a74c1210743b49ed5f89a4",
+      "history": [
+        "913bd5d0a02918f05de4dd267f6ff6457e634e5a765361404c0ede1c569aba0b"
+      ]
+    }
+  ]
+}
