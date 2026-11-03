@@ -131,6 +131,95 @@ module ""
         return list.str(s,1)
     }
 
+    // ---- Sitios conectados a la base: updatesite (paquete dkl-web) ----
+    // connectv12 escribe _config/<host>.json con {"qname": "<conexión>"}; el sitio vive en web/<host>.
+    update.sitio::host
+    {
+        sitio=path.concat(@sites_path,host)
+        if not(dir.exists(sitio))
+        {
+            do Log(">> Sitio "+host+": no existe "+sitio)
+            return 0
+        }
+
+        // Plantilla: la del registro de updatesite; sin registro, se deduce del contenido
+        plantilla=""
+        reg=path.concat(sitio,"_protected/site.installed.json")
+        if file.exists(reg)
+        {
+            ref r=parse.json(file.rtext(reg))
+            if not(isnull(r)) { plantilla=trim(@@(r,"$template")) }
+        }
+        if plantilla==""
+        {
+            if file.exists(path.concat(sitio,"_protected/render.dk"))
+            {
+                plantilla="v12"
+            }
+            else if file.exists(path.concat(sitio,"index.dkl"))
+            {
+                plantilla="v12-content-site"
+            }
+        }
+        if plantilla==""
+        {
+            do Log(">> Sitio "+host+": no se reconoce su plantilla; no se actualiza")
+            return 0
+        }
+        if not(file.exists(path.concat(path.concat(@templates_path,plantilla),"site.manifest")))
+        {
+            do Log(">> Sitio "+host+": la plantilla "+plantilla+" no tiene site.manifest; no se actualiza")
+            return 0
+        }
+
+        do Log(">> Sitio "+host+": updatesite "+plantilla)
+        cmd=ftext('updatesite "#<plantilla>" "#<host>" -hide-log')
+        res=_exec(@devkron,cmd,@true,@exec_timeout,@false)
+        do Log(res)
+        if findstr(res,"RESULTADO: OK")<0
+        {
+            @sitios_con_error=@sitios_con_error+1
+            do Log(">> Sitio "+host+": updatesite terminó con errores o no terminó; revise el reporte de arriba")
+        }
+        return 0
+    }
+
+    update.sitios::qname_db
+    {
+        if not(dir.exists(@sites_cfg))
+        {
+            do Log(">> Sin carpeta "+@sites_cfg+": no hay sitios conectados")
+            return 0
+        }
+        if not(file.exists("updatesite.dkl"))
+        {
+            do Log(">> No está updatesite.dkl (paquete dkl-web): los sitios no se actualizan")
+            return 0
+        }
+
+        ref cfgs=list.files(@sites_cfg,"*.json")
+        n=0
+        for i=0;i<@count(cfgs)
+        {
+            archivo=list.str(cfgs,i)
+            host=file.justname(archivo)
+            cq=""
+            ref cfg=parse.json(file.rtext(archivo))
+            if not(isnull(cfg)) { cq=trim(@@(cfg,"$qname")) }
+            if tolower(cq)==tolower(qname_db)
+            {
+                n=n+1
+                do update.sitio(host)
+            }
+            exception
+            {
+                do Log(">> Error con "+archivo+": "+last_error())
+            }
+        }
+        do Log(">> Sitios conectados a "+qname_db+": "+str(n)+", con errores: "+str(@sitios_con_error))
+        return 0
+    }
+
     if isset("@context"){ref args=@context}
     else{ref args=commandline("=")}
     
@@ -140,6 +229,10 @@ module ""
     @manifest_file="manifest.json"
     @file_ext=".zip"
     @devkron="./dkl"
+    @templates_path="_templates/sites"
+    @sites_path="web"
+    @sites_cfg="_config"
+    @sitios_con_error=0
 
     qname=trim(@@(args,"$db"))
     from=trim(@@(args,"$from"))
@@ -286,6 +379,21 @@ module ""
         }
 
         do Log("\n\n")
+    }
+
+    // Después de desplegar: llevar los sitios conectados a la base a su plantilla actual
+    if field.exist(args,"sinsitios")
+    {
+        do Log("> Sitios: no se actualizan (sinsitios)")
+    }
+    else
+    {
+        do Log("> Actualizar sitios conectados a "+qname)
+        codeblock
+        {
+            do update.sitios(qname)
+            exception { do Log(">> Error al actualizar sitios: "+last_error()) }
+        }
     }
     
     exception
