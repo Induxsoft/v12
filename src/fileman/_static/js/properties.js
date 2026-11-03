@@ -74,10 +74,10 @@ properties_web_btn.addEventListener('click', e => {
 
         properties_web_modal_options.childNodes.forEach(i=>{
             i.style.backgroundColor = "transparent";
-            i.style.color = "#888";
+            i.style.color = "var(--et-muted-fg, var(--ixt-muted-fg, #888))";
         });
-        properties_web_modal_options.firstChild.style.backgroundColor = "#fff";
-        properties_web_modal_options.firstChild.style.color = "#000";
+        properties_web_modal_options.firstChild.style.backgroundColor = "var(--et-bg, var(--ixt-bg, #fff))";
+        properties_web_modal_options.firstChild.style.color = "var(--et-fg, var(--ixt-fg, #000))";
     });
     if(!mostrar.classList.contains("hidde_control"))
         mostrar.classList.add("hidde_control");
@@ -607,10 +607,10 @@ function select_propertie(propertie, btn){
 
     properties_web_modal_options.childNodes.forEach(i=>{
         i.style.backgroundColor = "transparent";
-        i.style.color = "#888";
+        i.style.color = "var(--et-muted-fg, var(--ixt-muted-fg, #888))";
     });
-    btn.style.backgroundColor = "#fff";
-    btn.style.color = "#000";
+    btn.style.backgroundColor = "var(--et-bg, var(--ixt-bg, #fff))";
+    btn.style.color = "var(--et-fg, var(--ixt-fg, #000))";
     
     all_item_prop.forEach(item=>{
         item.style.display = "none";

@@ -141,7 +141,7 @@ module
             #!
             lenght = list.count(datatable)
             if lenght <= 0 {
-                #$ div(class="text-center" id="msg_#<table_id>") { h6(style="background-color:#F5F5F5; padding: 10rem 0;"){"Sin resultados"} }
+                #$ div(class="text-center" id="msg_#<table_id>") { h6(style="background-color:var(--et-panel-bg, var(--ixt-header-bg, #F5F5F5)); padding: 10rem 0;"){"Sin resultados"} }
             }
             #!
             else {
@@ -635,7 +635,7 @@ module
 
                         document.querySelectorAll(".v12-context-act-1").forEach(v12btn => {
                             v12btn.style.pointerEvents = (disable) ? "none" : "";
-                            v12btn.style.backgroundColor = (disable) ? "#e9ecef" : "";
+                            v12btn.style.backgroundColor = (disable) ? "var(--ix-input-disabled-bg, #e9ecef)" : "";
                             v12btn.style.opacity = (disable) ? "1" : "";
                         });
 

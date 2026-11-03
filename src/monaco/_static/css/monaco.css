@@ -4,7 +4,7 @@
     box-sizing: border-box;
 }
 #_code_editor{
-    border: 1px solid #ddd;
+    border: 1px solid var(--et-border, var(--ixt-border, #ddd));
     border-radius: 5px;
 }
 #sel_lang{
@@ -28,12 +28,12 @@
 }
 .lang select:hover{
     cursor: hand;
-    background-color: rgba(240,240,240,.8);
+    background-color: var(--et-hover-bg, var(--ixt-hover-bg, rgba(240,240,240,.8)));
 }
 .controls{
     display: flex;
-    background-color: #fff;
-    box-shadow: 0 1px 6px 0 #ddd;
+    background-color: var(--et-bg, var(--ixt-bg, #fff));
+    box-shadow: var(--et-shadow, var(--ixt-shadow, 0 1px 6px 0 #ddd));
     position: static;
 }
 .control_icon{
@@ -43,5 +43,5 @@
     transition: .3s;
 }
 .control_icon:hover{
-    background-color: #eee;
+    background-color: var(--et-hover-bg, var(--ixt-hover-bg, #eee));
 }

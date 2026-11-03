@@ -18,9 +18,9 @@
 	margin: 0;
 	padding: 0;
 	box-sizing: border-box;
-    border: 5px dashed #555;
+    border: 5px dashed var(--et-border, var(--ixt-border, #555));
 	border-radius: 5px;
-	background-color: rgba(167, 185, 202, 0.2);
+	background-color: var(--et-sel-bg-soft, var(--ixt-sel-bg-soft, rgba(167, 185, 202, 0.2)));
 }
 /* Nombre del archivo / carpeta */
 .fileman-viewfolder div div a p:nth-child(2){
@@ -44,12 +44,12 @@
 	padding: 5px;
 	transition: .3s;
 	flex-grow: 1;
-	color: #333;
+	color: var(--et-fg, var(--ixt-fg, #333));
 }
 .tool_bar_btn:hover{
 	cursor: hand;
-	background-color: #bbb;
-	color: #333;
+	background-color: var(--et-hover-bg, var(--ixt-hover-bg, #bbb));
+	color: var(--et-fg, var(--ixt-fg, #333));
 }	
 .tool_bar_btn p{
 	margin:0;
@@ -62,7 +62,7 @@
 }
 .a_fileman{
 	text-decoration: none;
-	color: #222;
+	color: var(--et-fg, var(--ixt-fg, #222));
 	text-align: center;
 	font-weight: 400;
 	font-size: .8rem;
@@ -74,35 +74,35 @@
 	padding: 0 3px;
 }
 .earth a{
-	color: #333;
+	color: var(--et-fg, var(--ixt-fg, #333));
 }
 .earth:hover{
-	background-color: rgba(150,200,255,.3);
+	background-color: var(--et-sel-bg-soft, var(--ixt-sel-bg-soft, rgba(150,200,255,.3)));
 }
 .route{
 	margin: 0;
 	padding: 0;
 	box-sizing: border-box;
 	width: 100%;
-	border: 1px solid #ddd;
+	border: 1px solid var(--et-border, var(--ixt-border, #ddd));
 	padding: 1px 8px;
 }
 .route span {
-	color: #AAA;
+	color: var(--et-muted-fg, var(--ixt-muted-fg, #AAA));
 }
 .back a img{
 	height: 1.5rem;
 	padding: 0 3px;
 }
 .back a img:hover{
-	background-color: rgba(150,200,255,.3);
+	background-color: var(--et-sel-bg-soft, var(--ixt-sel-bg-soft, rgba(150,200,255,.3)));
 }
 .back a svg{
 	height: 1.5rem;
 	padding: 0 3px;
 }
 .back a svg:hover{
-	background-color: rgba(150,200,255,.3);
+	background-color: var(--et-sel-bg-soft, var(--ixt-sel-bg-soft, rgba(150,200,255,.3)));
 }
 .title{
 	width: 100%;
@@ -119,18 +119,18 @@
 }
 .upload_file{
 	padding: .2rem 1rem;
-	color: white;
-	background-color: #0266C8;
+	color: var(--et-on-accent, var(--ixt-on-accent, white));
+	background-color: var(--et-accent, var(--ixt-accent, #0266C8));
 	transition: .2s;
-	border: 1px solid #0266C8;
+	border: 1px solid var(--et-accent, var(--ixt-accent, #0266C8));
 	font-size: .8rem;
 	display: flex;
 	align-items: center;
 	gap: 8px;
 }
 .upload_file:hover{
-	color: #0266C8;
-	background-color: #fff;
+	color: var(--et-accent, var(--ixt-accent, #0266C8));
+	background-color: var(--et-bg, var(--ixt-bg, #fff));
 }
 .route_navigation{
 	margin: 0;
@@ -139,7 +139,7 @@
 	display: flex;
 	width: 100%;
 	align-items: center;
-	background-color: #fff;
+	background-color: var(--et-bg, var(--ixt-bg, #fff));
 	margin-right: 10px;
 	z-index: 10;
 }
@@ -151,17 +151,17 @@
 	gap: 4px;
 }
 .view_mode a{
-	color: #333;
+	color: var(--et-fg, var(--ixt-fg, #333));
 	padding: 4px;
 }
 .listView{
 	grid-template-columns: 100%;
 }
 #input_search_container{
-	border: 1px solid #000;
+	border: 1px solid var(--et-border, var(--ixt-border, #000));
 	display: flex;
-	background-color: #f5f5f5;
-	border: 1px solid #ccc;
+	background-color: var(--et-header-bg, var(--ixt-header-bg, #f5f5f5));
+	border: 1px solid var(--et-border, var(--ixt-border, #ccc));
 	margin: 0;
 }
 #input_search{
@@ -174,24 +174,24 @@
 #input_search_btn{
 	border: none;
 	outline: none;
-	background-color: #0266C8;
-	color: #fff;
-	fill: #fff;
+	background-color: var(--et-accent, var(--ixt-accent, #0266C8));
+	color: var(--et-on-accent, var(--ixt-on-accent, #fff));
+	fill: var(--et-on-accent, var(--ixt-on-accent, #fff));
 }
 #filter_search{
 	font-size: .8rem;
 	border: none;
 	outline: none;
-	color: #aaa;
-	fill: #aaa;
+	color: var(--et-muted-fg, var(--ixt-muted-fg, #aaa));
+	fill: var(--et-muted-fg, var(--ixt-muted-fg, #aaa));
 }
 #upload_options{
 	position: absolute;
-	background-color: #fff;
-	box-shadow: 1px 3px 15px 0 #ddd;
+	background-color: var(--et-bg, var(--ixt-bg, #fff));
+	box-shadow: var(--et-shadow, var(--ixt-shadow, 1px 3px 15px 0 #ddd));
 	z-index: 100;
 	list-style: none;
-	border: 1px solid #eee;
+	border: 1px solid var(--et-border, var(--ixt-border, #eee));
 	padding: 22px 0;
 	display: none;
 	margin-left: 2rem;
@@ -208,10 +208,10 @@
 	align-items: center;
 	transition: .2s;
 	cursor: pointer;
-	color: #333;
+	color: var(--et-fg, var(--ixt-fg, #333));
 }
 #upload_options li:hover{
-	background-color: #f5f5f5;
+	background-color: var(--et-hover-bg, var(--ixt-hover-bg, #f5f5f5));
 }
 .upload_options_show{
 	display: block !important;
@@ -224,7 +224,7 @@
 	animation: show_downloader .2s ease forwards;
 }
 #processing{
-	background-color: #fff;
+	background-color: var(--et-bg, var(--ixt-bg, #fff));
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -232,11 +232,11 @@
 	height: 3rem;
 	position: fixed;
 	border-radius: 5px;
-	box-shadow: 3px 5px 15px 0 #bbb;
+	box-shadow: var(--et-shadow, var(--ixt-shadow, 3px 5px 15px 0 #bbb));
 	top: -4rem;
 	left: 0;
 	right: 0;
-	border-bottom: 4px solid #0266C8;
+	border-bottom: 4px solid var(--et-accent, var(--ixt-accent, #0266C8));
 	z-index: 1010;
 	transition: .5s;
 	margin: 0 auto;
@@ -290,9 +290,9 @@
 	max-height: 9rem;
 	max-width:7.5rem;
 	margin: .5rem;
-	border: 1px solid #eee;
+	border: 1px solid var(--et-border, var(--ixt-border, #eee));
 	border-radius: 5px;
-	box-shadow: 1px 3px 10px 0 #eee;
+	box-shadow: var(--et-shadow, var(--ixt-shadow, 1px 3px 10px 0 #eee));
 	transition: .3s;
 	flex-grow:1;
 	height: 9rem;
@@ -308,7 +308,7 @@
 	text-align: right;
 	position: relative;
 	left: -1000rem;
-	color: #333;
+	color: var(--et-fg, var(--ixt-fg, #333));
 }
 .file_container_box{
 	margin: 0;
@@ -331,7 +331,7 @@
 	max-height: 4rem;
 }
 .file_container:hover{
-	background-color: rgba(245,245,245,.8);
+	background-color: var(--et-hover-bg, var(--ixt-hover-bg, rgba(245,245,245,.8)));
 }
 .file_container:hover > .controls{
 	left: 0;
@@ -347,12 +347,12 @@
 	padding: 0;
 	margin: 0;
 	transform: translate(10rem);
-	background-color: #fff;
-	box-shadow: 1px 3px 10px 0 #eee;
+	background-color: var(--et-bg, var(--ixt-bg, #fff));
+	box-shadow: var(--et-shadow, var(--ixt-shadow, 1px 3px 10px 0 #eee));
 	list-style:none;
 	position: absolute;
 	z-index: 1000;
-	border: 1px solid #eee;
+	border: 1px solid var(--et-border, var(--ixt-border, #eee));
 }
 .file_option a{
 	padding: 12px 32px;
@@ -361,10 +361,10 @@
 }
 .file_option a{
 	text-decoration: none;
-	color: #555;
+	color: var(--et-muted-fg, var(--ixt-muted-fg, #555));
 }
 .file_option:hover{
-	background-color: #f5f5f5;
+	background-color: var(--et-hover-bg, var(--ixt-hover-bg, #f5f5f5));
 }
 /*=========================TEST*/
 .controls2{
@@ -376,19 +376,19 @@
 	border: none;
 	outline: none;
 	background-color: transparent;
-	color: #aaa;
-	fill: #aaa;
+	color: var(--et-muted-fg, var(--ixt-muted-fg, #aaa));
+	fill: var(--et-muted-fg, var(--ixt-muted-fg, #aaa));
 	transition: .3s;
 }
 #options_control2:hover{
-	color: #000;
-	fill: #000;
+	color: var(--et-fg, var(--ixt-fg, #000));
+	fill: var(--et-fg, var(--ixt-fg, #000));
 }
 /*=============================*/
 .controls{ 
 	text-align: right;
 	border-radius: 5px;
-	background-color: white;
+	background-color: var(--et-bg, var(--ixt-bg, white));
 	position: relative;
 	left: -10000px;
 	display: flex;
@@ -396,8 +396,8 @@
 	width: 100%;
 }
 .controls a:hover, .view_mode a:hover{
-	background-color: #ccc;
-	color: #333;
+	background-color: var(--et-hover-bg, var(--ixt-hover-bg, #ccc));
+	color: var(--et-fg, var(--ixt-fg, #333));
 }
 .controls a{
 	transition: .3s;
@@ -406,7 +406,7 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	color: #333;
+	color: var(--et-fg, var(--ixt-fg, #333));
 }
 .tool_bar{
 	margin-left: 1rem;
@@ -414,8 +414,8 @@
 	display:flex;
 	justify-content: space-around;
 	align-items: center;
-	background-color: #eee;
-	border: 1px solid #ddd;
+	background-color: var(--et-header-bg, var(--ixt-header-bg, #eee));
+	border: 1px solid var(--et-border, var(--ixt-border, #ddd));
 	z-index: 1000;
 }
 .tool_bar img{
@@ -435,12 +435,12 @@
 	width: 100%;
 	display: flex;
 	transition: .3s;
-	border-top: 1px solid #eee;
+	border-top: 1px solid var(--et-border, var(--ixt-border, #eee));
 	transition: .3s;
 	
 }
 .file_container_list:hover{
-	background-color: rgba(245,245,245,.8);
+	background-color: var(--et-hover-bg, var(--ixt-hover-bg, rgba(245,245,245,.8)));
 }
 .file_container_box_list{
 	flex-grow: 9;
@@ -482,7 +482,7 @@
 	justify-content: end;
 }
 .controls_list a{
-	color: #333;
+	color: var(--et-fg, var(--ixt-fg, #333));
 }
 
 
@@ -497,16 +497,16 @@
 	display: grid;
 	grid-column: 100%;
 	grid-template-rows: 85% 15%;
-	border: 1px solid #eee;
+	border: 1px solid var(--et-border, var(--ixt-border, #eee));
 	border-radius: 5px;
-	box-shadow: 1px 3px 10px 0 #eee;
+	box-shadow: var(--et-shadow, var(--ixt-shadow, 1px 3px 10px 0 #eee));
 	transition: .3s;
 	text-overflow: ellipsis;
 	overflow: hidden;
 	white-space: nowrap;
 }
 .file_container_card:hover{
-	background-color: rgba(245,245,245,.8);
+	background-color: var(--et-hover-bg, var(--ixt-hover-bg, rgba(245,245,245,.8)));
 }
 .file_container_box_card{
 	padding: 8px 16px;
@@ -539,7 +539,7 @@
 	height: 4rem;
 	text-align: justify;
 	margin-top: 8px;
-	color: #666;
+	color: var(--et-muted-fg, var(--ixt-muted-fg, #666));
 	text-overflow:inherit;
 	overflow:auto;
 	white-space: break-spaces;
@@ -557,20 +557,20 @@
 .controls_card{ 
 	text-align: right;
 	border-radius: 5px;
-	background-color: white;
+	background-color: var(--et-bg, var(--ixt-bg, white));
 	display: flex;
 	justify-content: flex-end;
 	width: 100%;
 }
 .controls_card a{
-	color: #333;
+	color: var(--et-fg, var(--ixt-fg, #333));
 	padding: 0 4px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 }
 .controls_card a:hover{
-	background-color: #ccc;
+	background-color: var(--et-hover-bg, var(--ixt-hover-bg, #ccc));
 }
 
 
@@ -582,7 +582,7 @@
 		flex-wrap: wrap;
 		position: fixed;
 		left:0;
-		box-shadow: 0 2px 5px 0 #ddd;
+		box-shadow: var(--et-shadow, var(--ixt-shadow, 0 2px 5px 0 #ddd));
 	}
 	.title{
 		margin-top: 6rem;
@@ -605,11 +605,11 @@
 		gap: 0;
 	}
 	.file_container_box_list p{
-		color: #555;
+		color: var(--et-muted-fg, var(--ixt-muted-fg, #555));
 		text-align: left;
 	}
 	.file_container_box_list p:nth-child(2){
-		color: #000;
+		color: var(--et-fg, var(--ixt-fg, #000));
 	}
 	.file_container_box_list .icon_list{
 		grid-row: 1/4;
