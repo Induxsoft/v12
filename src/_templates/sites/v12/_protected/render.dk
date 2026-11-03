@@ -4,6 +4,7 @@ module ""
 {
     #include "functions.dkh"
     #include "dbr.dkh"
+    #include "webshell/_lib/head.dk"
 
     v12_view_info::
 	{
@@ -47,6 +48,10 @@ module ""
 		exception { return ""}
 	}
 
+    // Antes de cerrar la base: webshell.head() lee el tema y los colores
+    @webshell_head = ""
+    if contains(@@(@http_context,"$request/headers/http_accept"),"html") { @webshell_head = webshell.head() }
+
     ref database=@@(@http_context,"&session/idp/database")
     if not(isnull(database))
     {
@@ -55,7 +60,7 @@ module ""
 
     if not(contains(@@(@http_context,"$request/headers/http_accept"),"html")) { return }
     template='<!DOCTYPE html>
-    <html lang="es-MX">
+    <html lang="es-MX"#<webshell.html_attrs()>>
         <head>
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <meta charset = "utf-8" />
@@ -79,25 +84,8 @@ module ""
             <meta name="twitter:description" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/twitter/description")>">
             <meta name="twitter:image" content="#<@@(@http_context,"$session/resource/properties/web_meta_tags/twitter/image")>">
 
-            <!-- Bootstrap CSS -->
-            <link href="/css/bootstrap.min.css" rel="stylesheet">
-
-            <!-- Induxsoft FormStyles CSS -->
-            <link href="/css/induxsoft.formstyles.css" rel="stylesheet">
-            <link href="/css/induxsoft.v12.styles.css" rel="stylesheet">
-            
-            <!-- Bootstrap & POPPER JS -->
-            <script src="/js/bootstrap.bundle.min.js"></script>
-
-            <!-- Induxsoft Web Components -->
-            <script src="/js/induxsoft.v12.ui.js"></script>
-            <script src="/js/induxsoft.controls.js"></script>
-            <script src="/js/induxsoft.controls.editable.js"></script>
-            <script src="/js/induxsoft.crudl.model.js"></script>
-            <script src="/js/induxsoft.math.js"></script>
-            <script src="/js/induxsoft.number.fields.js"></script>
-            <script src="/js/suggest_marks.js"></script>
-            <script src="/js/lib.js"></script>
+            <!-- Encabezado común de webshell: tema, CSS y JS desde /$/webshell/ (webshell/_lib/head.dk) -->
+            #<@webshell_head>
 
             <!-- CSS -->
             <style>

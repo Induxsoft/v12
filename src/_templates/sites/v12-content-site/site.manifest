@@ -1,6 +1,6 @@
 {
   "template": "v12-content-site",
-  "version": "1.0.234",
+  "version": "1.0.235",
   "files": [
     {
       "path": "_protected/auth.dk",

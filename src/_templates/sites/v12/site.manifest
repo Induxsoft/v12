@@ -1,6 +1,6 @@
 {
   "template": "v12",
-  "version": "1.0.234",
+  "version": "1.0.235",
   "files": [
     {
       "path": "_protected/auth.dk",
@@ -49,7 +49,7 @@
     },
     {
       "path": "_protected/render.dk",
-      "sha256": "7f9d8438edff74b30e35a6b8cb0f688ed96a7f199114b528f371849d8ce752ea",
+      "sha256": "b4327c17ed057b641a5f929e156c527ef8241b610caaf0f7d70919c2bc479177",
       "history": [
         "025bc6d9d812907437c03e178056e0d72f82245bd8c1a21206233d3bb7696eff",
         "034f3e11bbbc2ae3c77ef7a96f97bb01b64d5e7e24e477fc61e2c67353962a4c",
@@ -62,8 +62,10 @@
         "2ae4627809521d6389bf8b13d1433b748ffc02e2e1f36922032f14ec92bc2d80",
         "2bf4b880444b7114e0ce8ba405c8c8a914923fa9e9877b720de5ad9b5c8d70f5",
         "4ff412c39a7a906774f6adeec1c90ea1f9d91dd246af45537ab0dfc250477e9a",
+        "5e26d668fbc92078b0a8b12ef540ee74a0ba2d4b3fa9118ed1f7f658838336ee",
         "5e593ee2c8a9031c0d9a5a49231a5e35a7d384557d2417524596a2156ab65c4c",
         "61210c233913a9ab7b529a8f827abb45bd9487d13ea9b6648ea7095e09fd6d6e",
+        "7f9d8438edff74b30e35a6b8cb0f688ed96a7f199114b528f371849d8ce752ea",
         "8eab2ebde6a7c87ad70afbbe5796b5dba852a5c127263195aff70d3b964831bc",
         "95a724ef556f202b4cbcbdf6e8b3c327b04a895ba452cc6c9e0170361f597a52",
         "9ce14077e3e4a9ec91ac2b28c1d7958ec04c40d58dfd9101eabd005558b6d810",
