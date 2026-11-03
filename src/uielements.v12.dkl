@@ -83,7 +83,7 @@ module
                     "hidde-selector"="true" "cards-responsive"="true" style="width:100%;"
                     "control-styles"="
                         div:has(table##<table_id>) { overflow:revert !important; }
-                        ##<table_id> tr th { font-weight:500; }
+                        ##<table_id> tr th { font-weight:var(--et-header-weight, var(--et-t-header-weight, 500)); }
                     
                         @media print {
                             ##<table_id> { overflow:hidden; }
