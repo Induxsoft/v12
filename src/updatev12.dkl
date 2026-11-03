@@ -131,6 +131,49 @@ module ""
         return list.str(s,1)
     }
 
+    // ---- Núcleo sin aplicaciones (dkl-ddm, dkl-web, v12) ----
+    // No tienen filas en sys_app_catalog, así que el ciclo de paquetes nunca los ve (T011 de v12_qa).
+    // Se despliegan si la fuente trae una versión mayor que la de su .manifest local. No se instalan.
+    update.nucleo::&params
+    {
+        ref ids=split(@nucleo,",")
+        for i=0;i<@count(ids)
+        {
+            id_pack=trim(list.str(ids,i))
+            if id_pack!=""
+            {
+                if not(field.exist(@manifest_packs,id_pack))
+                {
+                    do Log(">> Núcleo "+id_pack+": no está en "+@manifest_file+" de la fuente; no se actualiza")
+                }
+                else
+                {
+                    ref remoto=field.obj(@manifest_packs,id_pack)
+                    version_remota=trim(@@(remoto,"$version"))
+                    version_local=""
+                    desplegar=@true
+                    ref man_local=search.manifest(id_pack)
+                    if not(isnull(man_local))
+                    {
+                        version_local=trim(@@(man_local,"$version"))
+                        desplegar=version.compare(version_local,version_remota)==2
+                    }
+                    do Log(">> Núcleo "+id_pack+": local "+ifstr(version_local=="","(desconocida)",version_local)+", fuente "+version_remota+", requiere deploy: "+ifstr(desplegar,"SÍ","NO"))
+                    if desplegar
+                    {
+                        params<"packs">:id_pack
+                        do deploy_packs(params)
+                    }
+                }
+            }
+            exception
+            {
+                do Log(">> Error en núcleo "+id_pack+": "+last_error())
+            }
+        }
+        return 0
+    }
+
     // ---- Sitios conectados a la base: updatesite (paquete dkl-web) ----
     // connectv12 escribe _config/<host>.json con {"qname": "<conexión>"}; el sitio vive en web/<host>.
     update.sitio::host
@@ -233,6 +276,7 @@ module ""
     @sites_path="web"
     @sites_cfg="_config"
     @sitios_con_error=0
+    @nucleo="dkl-ddm,dkl-web,v12"
 
     qname=trim(@@(args,"$db"))
     from=trim(@@(args,"$from"))
@@ -246,6 +290,7 @@ module ""
     if trim(@@(args,"$from"))!="" { @source_url=trim(@@(args,"$from")) }
     if trim(@@(args,"$cat"))!="" { @cat_file=trim(@@(args,"$cat")) }
     if trim(@@(args,"$path_dkl")) != ""{@devkron=trim(@@(args,"$path_dkl"))}
+    if trim(@@(args,"$nucleo")) != ""{@nucleo=trim(@@(args,"$nucleo"))}
 
     args<"qname">:qname
 
@@ -296,6 +341,21 @@ module ""
 
     md5_url=md5(@source_url)
     @path_dir=path.concat(@path_root,md5_url)
+
+    // Primero el núcleo: los paquetes se instalan con el dkl-ddm y el v12 nuevos
+    if field.exist(args,"sinnucleo")
+    {
+        do Log("> Núcleo: no se actualiza (sinnucleo)")
+    }
+    else
+    {
+        do Log("> Núcleo sin aplicaciones: "+@nucleo)
+        codeblock
+        {
+            do update.nucleo(args)
+            exception { do Log(">> Error al actualizar el núcleo: "+last_error()) }
+        }
+    }
 
     for i=0;i< @count(@paquetes)
     {
