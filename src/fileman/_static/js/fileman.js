@@ -101,47 +101,26 @@ var fileman={
 	invoqueCopy:function(data, fromPath, callback_success, callback_fail)
 	{
 		fileman.waiting();
-		$.ajax({
-			type: "POST",
-			url: fromPath+"do.fso",
-			data: JSON.stringify(data),
-			contentType: "application/json; charset=utf-8",
-			dataType: "json",
-			success: function(r){
-				var res = JSON.parse(JSON.stringify(r));
-				if (res.success)
-				{
-					if (callback_success)
-						callback_success(res.data);
-				}
-				else
-				{
-					if (callback_fail)
-						callback_fail(res.message);
-				}
-			},
-			error: function(r){
-				alert("Ocurrió un error al invocar el servicio.\n\r"+r.statusText);
+		fileman.post(fromPath+"do.fso", JSON.stringify(data), true, function(res){
+			if (res.success)
+			{
+				if (callback_success)
+					callback_success(res.data);
 			}
-		}).always(function(){
+			else
+			{
+				if (callback_fail)
+					callback_fail(res.message);
+			}
+		}, function(){
 			location.reload();
 		});
 	},
 	setCookieData:function(data,success){
-		$.ajax({
-			type: "POST",
-			url: fileman.currentURL,
-			data: JSON.stringify(data),
-			contentType: "application/json; charset=utf-8",
-			dataType: "json",
-			success: function(r){
-				fileman.cookieData=r;
-				if (success)
-					success(r);
-			},
-			error: function(r){
-				alert("Ocurrió un error al invocar el servicio.\n\r"+r.statusText);
-			}
+		fileman.post(fileman.currentURL, JSON.stringify(data), true, function(r){
+			fileman.cookieData=r;
+			if (success)
+				success(r);
 		});
 	},
 	addSelectedFile:function(fn)
@@ -491,30 +470,18 @@ var fileman={
 	invoque: function (params,callback_success, callback_fail)
 	{
 		fileman.waiting();
-		$.ajax({
-			type: "POST",
-			url: fileman.folderPath+"do.fso",
-			data: JSON.stringify(params),
-			contentType: "application/json; charset=utf-8",
-			dataType: "json",
-			success: function(r){
-				var res = JSON.parse(JSON.stringify(r));
-				if (res.success)
-				{
-					if (callback_success)
-						callback_success(res.data);
-				}
-				else
-				{
-					if (callback_fail)
-						callback_fail(res.message);
-				}
-			},
-			error: function(r){
-				alert("Ocurrió un error al invocar el servicio.\n\r"+r.statusText);
+		fileman.post(fileman.folderPath+"do.fso", JSON.stringify(params), true, function(res){
+			if (res.success)
+			{
+				if (callback_success)
+					callback_success(res.data);
 			}
-
-		}).always(function(){
+			else
+			{
+				if (callback_fail)
+					callback_fail(res.message);
+			}
+		}, function(){
 			location.reload();
 		});
 	},
@@ -522,82 +489,60 @@ var fileman={
 	invoqueUpFiles: function (formData,callback_success, callback_fail)
 	{
 		fileman.waiting();
-		$.ajax({
-			type: "POST",
-			url: fileman.folderPath+"upl.fso",
-			data: formData,
-			cache:false,
-			contentType: false,
-			processData: false,  // tell jQuery not to process the data
-  		
-			success: function(r){
-				
-				var res = JSON.parse(JSON.stringify(r));
-				if (res.success)
-				{
-					if (callback_success)
-						callback_success(res.data);
-				}
-				else
-				{
-					if (callback_fail)
-						callback_fail(res.message);
-				}
-			},
-			error: function(r){
-				alert("Ocurrió un error al invocar el servicio.\n\r"+r.statusText);
+		fileman.post(fileman.folderPath+"upl.fso", formData, false, function(res){
+			if (res.success)
+			{
+				if (callback_success)
+					callback_success(res.data);
 			}
-
-		}).always(function(){
+			else
+			{
+				if (callback_fail)
+					callback_fail(res.message);
+			}
+		}, function(){
 			location.reload();
 		});
 	},
 	invoque_set_file: function (params,callback_success, callback_fail)
 	{
-		$.ajax({
-			type: "POST",
-			url: fileman.folderPath+"set.fso",
-			data: JSON.stringify(params),
-			contentType: "application/json; charset=utf-8",
-			dataType: "json",
-			success: function(r){
-				
-				var res = JSON.parse(JSON.stringify(r));
-				if (res.success)
-				{
-					if (callback_success)
-						callback_success(res.data);
-				}
-				else
-				{
-					if (callback_fail)
-						callback_fail(res.message);
-				}
-			},
-			error: function(r){
-				alert("Ocurrió un error al invocar el servicio.\n\r"+r.statusText);
+		fileman.post(fileman.folderPath+"set.fso", JSON.stringify(params), true, function(res){
+			if (res.success)
+			{
+				if (callback_success)
+					callback_success(res.data);
+			}
+			else
+			{
+				if (callback_fail)
+					callback_fail(res.message);
 			}
 		});
 	},
 	checkboxFile:function(cb,fn)
 	{
-		if($(cb).prop("checked")){
+		if(cb.checked){
 			fileman.addSelectedFile(fn);
 		}
 		else{
 			fileman.delSelectedFile(fn);
 		}
-		$(document).ready(function(){
-			if(fileman.selectedFiles.length<1){
-				$("div.tool_bar_copy").css("pointer-events","none");
-				$("div.tool_bar_cut").css("pointer-events","none");
-				$("div.tool_bar_delete").css("pointer-events","none");
-			}else{
-				$(".tool_bar_copy").css("pointer-events","auto");
-				$(".tool_bar_cut").css("pointer-events","auto");
-				$(".tool_bar_delete").css("pointer-events","auto");
-			}
-		});
+		if(fileman.selectedFiles.length<1){
+			document.querySelectorAll("div.tool_bar_copy, div.tool_bar_cut, div.tool_bar_delete").forEach(el => el.style.pointerEvents = "none");
+		}else{
+			document.querySelectorAll(".tool_bar_copy, .tool_bar_cut, .tool_bar_delete").forEach(el => el.style.pointerEvents = "auto");
+		}
+	},
+	// POST al servicio de FSO (antes $.ajax). json=true: el cuerpo va como application/json; si no, es FormData.
+	// La respuesta se interpreta como JSON; si falla la red, el estado HTTP o el JSON, avisa como antes. always corre al final.
+	post:function(url, body, json, success, always){
+		const opts = { method: "POST", body: body, cache: "no-store", headers: { "Accept": "application/json" } };
+		if (json) opts.headers["Content-Type"] = "application/json; charset=utf-8";
+		fetch(url, opts)
+		.then(r => { if (!r.ok) throw r; return r.json(); })
+		.then(r => { if (success) success(r); })
+		.catch(r => { alert("Ocurrió un error al invocar el servicio.\n\r"+((r && (r.statusText || r.message)) || "")); })
+		.finally(() => { if (always) always(); });
 	},
 	waiting:function(){
 		let processing = document.querySelector("#processing");
@@ -611,25 +556,12 @@ var fileman={
 	}
 };
 
-function myJQueryCode() {
-
-    $(document).ready(() => {
-		
-		fileman.load_drag();
-        $(".privileges_select").val("");
-        $("#modal_con_select").val("");
-        $("#modal_id_select").val("");
-	});
+function filemanStart() {
+	fileman.load_drag();
+	document.querySelectorAll(".privileges_select, #modal_con_select, #modal_id_select").forEach(el => el.value = "");
 }
 
-if(typeof jQuery=='undefined') {
-
-    var headTag = document.getElementsByTagName("head")[0];
-    var jqTag = document.createElement('script');
-    jqTag.type = 'text/javascript';
-    jqTag.src = 'https://code.jquery.com/jquery-3.6.0.min.js';
-    jqTag.onload = myJQueryCode;
-    headTag.appendChild(jqTag);
-} else {
-     myJQueryCode();
-}
+if (document.readyState === "loading")
+	document.addEventListener("DOMContentLoaded", filemanStart);
+else
+	filemanStart();

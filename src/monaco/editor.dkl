@@ -80,7 +80,7 @@ program "Editor de archivos basado en Monaco"
             }
             div(class="lang" align="right")
             {
-                select(id="sel_lang" onchange="change_lang($('#sel_lang').val());" )
+                select(id="sel_lang" onchange="change_lang(this.value);" )
                 {
                     ##
                     for i=0;i<@count(languages)

@@ -1,22 +1,19 @@
-function myJQueryCode() {
-    $(document).ready(() => {
-		//
-        $(".privileges_select").val("");
-        $("#modal_con_select").val("");
-        $("#modal_id_select").val("");
-	});
+// Ayudantes nativos (antes jQuery): .val(), .val(x), .html(x), addClass/removeClass sobre todos los que coinciden.
+function propGet(sel) { const el = document.querySelector(sel); if (!el) return undefined; if (el.tagName == "SELECT" && el.selectedIndex < 0) return null; return String(el.value).replace(/\r/g, ""); }
+function propVal(sel, v) { document.querySelectorAll(sel).forEach(el => el.value = v); }
+function propHtml(sel, h) { document.querySelectorAll(sel).forEach(el => el.innerHTML = h); }
+function propClass(sel, cls, on) { document.querySelectorAll(sel).forEach(el => el.classList.toggle(cls, on)); }
+
+function propertiesStart() {
+    propVal(".privileges_select", "");
+    propVal("#modal_con_select", "");
+    propVal("#modal_id_select", "");
 }
 
-if(typeof jQuery=='undefined') {
-    var headTag = document.getElementsByTagName("head")[0];
-    var jqTag = document.createElement('script');
-    jqTag.type = 'text/javascript';
-    jqTag.src = 'https://code.jquery.com/jquery-3.6.0.min.js';
-    jqTag.onload = myJQueryCode;
-    headTag.appendChild(jqTag);
-} else {
-     myJQueryCode();
-}
+if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", propertiesStart);
+else
+    propertiesStart();
 
 let mostrar = document.querySelector(".avanced");
 let text_area = document.querySelector("#properties_code");
@@ -96,31 +93,31 @@ properties_web_btn.addEventListener('click', e => {
             if (resource_metadata.properties.web_meta_tags)
             {
                 // General metatags
-                if(resource_metadata.properties.web_meta_tags.title){$("#general_meta_title").val(resource_metadata.properties.web_meta_tags.title);}
-                if(resource_metadata.properties.web_meta_tags.description){$("#general_meta_description").val(resource_metadata.properties.web_meta_tags.description);}
-                if(resource_metadata.properties.web_meta_tags.keywords){$("#general_meta_key_words").val(resource_metadata.properties.web_meta_tags.keywords);}
-                if(resource_metadata.properties.web_meta_tags.favicon){$("#general_meta_favicon").val(resource_metadata.properties.web_meta_tags.favicon);}
-                if(resource_metadata.properties.web_meta_tags.favicon_mimetype){$("#general_meta_mime_favicon").val(resource_metadata.properties.web_meta_tags.favicon_mimetype);}
+                if(resource_metadata.properties.web_meta_tags.title){propVal("#general_meta_title", resource_metadata.properties.web_meta_tags.title);}
+                if(resource_metadata.properties.web_meta_tags.description){propVal("#general_meta_description", resource_metadata.properties.web_meta_tags.description);}
+                if(resource_metadata.properties.web_meta_tags.keywords){propVal("#general_meta_key_words", resource_metadata.properties.web_meta_tags.keywords);}
+                if(resource_metadata.properties.web_meta_tags.favicon){propVal("#general_meta_favicon", resource_metadata.properties.web_meta_tags.favicon);}
+                if(resource_metadata.properties.web_meta_tags.favicon_mimetype){propVal("#general_meta_mime_favicon", resource_metadata.properties.web_meta_tags.favicon_mimetype);}
 
                 if (resource_metadata.properties.web_meta_tags.og)
                 {
                     // Open_graph metatags
-                    if(resource_metadata.properties.web_meta_tags.og.url){$("#open_graph_meta_url").val(resource_metadata.properties.web_meta_tags.og.url);}
-                    if(resource_metadata.properties.web_meta_tags.og.type){$("#open_graph_meta_type").val(resource_metadata.properties.web_meta_tags.og.type);}
-                    if(resource_metadata.properties.web_meta_tags.og.title){$("#open_graph_meta_title").val(resource_metadata.properties.web_meta_tags.og.title);}
-                    if(resource_metadata.properties.web_meta_tags.og.description){$("#open_graph_meta_description").val(resource_metadata.properties.web_meta_tags.og.description);}
-                    if(resource_metadata.properties.web_meta_tags.og.image){$("#open_graph_meta_image").val(resource_metadata.properties.web_meta_tags.og.image);}
+                    if(resource_metadata.properties.web_meta_tags.og.url){propVal("#open_graph_meta_url", resource_metadata.properties.web_meta_tags.og.url);}
+                    if(resource_metadata.properties.web_meta_tags.og.type){propVal("#open_graph_meta_type", resource_metadata.properties.web_meta_tags.og.type);}
+                    if(resource_metadata.properties.web_meta_tags.og.title){propVal("#open_graph_meta_title", resource_metadata.properties.web_meta_tags.og.title);}
+                    if(resource_metadata.properties.web_meta_tags.og.description){propVal("#open_graph_meta_description", resource_metadata.properties.web_meta_tags.og.description);}
+                    if(resource_metadata.properties.web_meta_tags.og.image){propVal("#open_graph_meta_image", resource_metadata.properties.web_meta_tags.og.image);}
                 }
 
                 if (resource_metadata.properties.web_meta_tags.twitter)
                 {
                     // Open_graph metatags
-                    if(resource_metadata.properties.web_meta_tags.twitter.card){$("#twitter_meta_card").val(resource_metadata.properties.web_meta_tags.twitter.card);}
-                    if(resource_metadata.properties.web_meta_tags.twitter.domain){$("#twitter_meta_domain").val(resource_metadata.properties.web_meta_tags.twitter.domain);}
-                    if(resource_metadata.properties.web_meta_tags.twitter.url){$("#twitter_meta_url").val(resource_metadata.properties.web_meta_tags.twitter.url);}
-                    if(resource_metadata.properties.web_meta_tags.twitter.title){$("#twitter_meta_title").val(resource_metadata.properties.web_meta_tags.twitter.title);}
-                    if(resource_metadata.properties.web_meta_tags.twitter.description){$("#twitter_meta_description").val(resource_metadata.properties.web_meta_tags.twitter.description);}
-                    if(resource_metadata.properties.web_meta_tags.twitter.image){$("#twitter_meta_image").val(resource_metadata.properties.web_meta_tags.twitter.image);}
+                    if(resource_metadata.properties.web_meta_tags.twitter.card){propVal("#twitter_meta_card", resource_metadata.properties.web_meta_tags.twitter.card);}
+                    if(resource_metadata.properties.web_meta_tags.twitter.domain){propVal("#twitter_meta_domain", resource_metadata.properties.web_meta_tags.twitter.domain);}
+                    if(resource_metadata.properties.web_meta_tags.twitter.url){propVal("#twitter_meta_url", resource_metadata.properties.web_meta_tags.twitter.url);}
+                    if(resource_metadata.properties.web_meta_tags.twitter.title){propVal("#twitter_meta_title", resource_metadata.properties.web_meta_tags.twitter.title);}
+                    if(resource_metadata.properties.web_meta_tags.twitter.description){propVal("#twitter_meta_description", resource_metadata.properties.web_meta_tags.twitter.description);}
+                    if(resource_metadata.properties.web_meta_tags.twitter.image){propVal("#twitter_meta_image", resource_metadata.properties.web_meta_tags.twitter.image);}
                 }
             }
         }
@@ -211,7 +208,7 @@ mostrar.addEventListener('click', e=> {
 
     if (resource_metadata.properties)
     {
-        $("#properties_code").val(JSON.stringify(resource_metadata.properties,null,2) );
+        propVal("#properties_code", JSON.stringify(resource_metadata.properties,null,2) );
     }
 });
 
@@ -235,7 +232,7 @@ modify_btn.addEventListener('click', e => {
     add_priv.classList.remove("disableControl");
     remove_priv.classList.remove("disableControl");
     add_priv_group.classList.remove("disableControl");
-    $(".remove_group").removeClass("disableControl");
+    propClass(".remove_group", "disableControl", false);
 });
 
 cancel_btn.addEventListener('click', e => {
@@ -246,18 +243,18 @@ cancel_btn.addEventListener('click', e => {
     add_priv.classList.add("disableControl");
     remove_priv.classList.add("disableControl");
     add_priv_group.classList.add("disableControl");
-    $(".remove_group").addClass("disableControl");
+    propClass(".remove_group", "disableControl", true);
 
     dataPrivModified = JSON.parse(JSON.stringify(resource_metadata.privileges));
-    $(".privileges_group").html(privilegesGroup(null));
-    $(".privileges_information").html(privilegesInfo(null));
-    $(".privileges_select").html(selectPrivileges(dataPrivModified));
+    propHtml(".privileges_group", privilegesGroup(null));
+    propHtml(".privileges_information", privilegesInfo(null));
+    propHtml(".privileges_select", selectPrivileges(dataPrivModified));
 
-    $(".privileges_select").val("");
-    $("#modal_con_select").val("");
-    $("#modal_id_select").val("");
-    $("#manual_con_select").val("");
-    $("#manual_id_select").val("");
+    propVal(".privileges_select", "");
+    propVal("#modal_con_select", "");
+    propVal("#modal_id_select", "");
+    propVal("#manual_con_select", "");
+    propVal("#manual_id_select", "");
 });
 
 aply_btn.addEventListener('click', e => {
@@ -281,7 +278,7 @@ modal_con_select.addEventListener('change', e => {
     }
 
     if(ids)
-        $("#modal_id_select").html(idsData(ids));
+        propHtml("#modal_id_select", idsData(ids));
 });
 
 modal_id_select.addEventListener('click', e => {
@@ -379,10 +376,10 @@ select.addEventListener('change', e => {
             return p;
     });
 
-    $(".privileges_information").html(privilegesInfo(privilegeInfo[0]));
+    propHtml(".privileges_information", privilegesInfo(privilegeInfo[0]));
     
     dataPriv = resource_metadata.privileges[e.target.value];
-    $(".privileges_group").html(privilegesGroup(dataPrivModified[e.target.value]));
+    propHtml(".privileges_group", privilegesGroup(dataPrivModified[e.target.value]));
 });
 
 aply_code_btn.addEventListener('click', e => {
@@ -409,7 +406,7 @@ add_priv_group.addEventListener('click', e => {
         return;
     }
     modal.classList.add("show_control");
-    $('html, body').animate({scrollTop:0}, 'slow');
+    window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
 modal_cancel_btn.addEventListener('click', e => {
@@ -469,7 +466,7 @@ function add_concept_privilege()
     else
         dataPrivModified[select.value] = [objconcepto];
 
-    $(".privileges_group").html(privilegesGroup(dataPrivModified[select.value]));
+    propHtml(".privileges_group", privilegesGroup(dataPrivModified[select.value]));
 }
 
 
@@ -488,32 +485,32 @@ function remove_concept_privilege(concept, id)
     });
 
     dataPrivModified[select.value] = JSON.parse(JSON.stringify(arr));
-    $(".privileges_group").html(privilegesGroup(dataPrivModified[select.value]));
+    propHtml(".privileges_group", privilegesGroup(dataPrivModified[select.value]));
 }
 
 
 function save_metadata(){
     var rq={};
     rq["web_meta_tags"]={
-        title: $("#general_meta_title").val(),
-        description: $("#general_meta_description").val(),
-        keywords: $("#general_meta_key_words").val(),
-        favicon: $("#general_meta_favicon").val(),
-        favicon_mimetype: $("#general_meta_mime_favicon").val(),
+        title: propGet("#general_meta_title"),
+        description: propGet("#general_meta_description"),
+        keywords: propGet("#general_meta_key_words"),
+        favicon: propGet("#general_meta_favicon"),
+        favicon_mimetype: propGet("#general_meta_mime_favicon"),
         og : {
-            url : $("#open_graph_meta_url").val(),
-            type : $("#open_graph_meta_type").val(),
-            title : $("#open_graph_meta_title").val(),
-            description : $("#open_graph_meta_description").val(),
-            image : $("#open_graph_meta_image").val()
+            url : propGet("#open_graph_meta_url"),
+            type : propGet("#open_graph_meta_type"),
+            title : propGet("#open_graph_meta_title"),
+            description : propGet("#open_graph_meta_description"),
+            image : propGet("#open_graph_meta_image")
         },
         twitter:{
-            card : $("#twitter_meta_card").val(),
-            domain : $("#twitter_meta_domain").val(),
-            url : $("#twitter_meta_url").val(),
-            title : $("#twitter_meta_title").val(),
-            description : $("#twitter_meta_description").val(),
-            image : $("#twitter_meta_image").val()
+            card : propGet("#twitter_meta_card"),
+            domain : propGet("#twitter_meta_domain"),
+            url : propGet("#twitter_meta_url"),
+            title : propGet("#twitter_meta_title"),
+            description : propGet("#twitter_meta_description"),
+            image : propGet("#twitter_meta_image")
         }
     };
 
@@ -590,9 +587,9 @@ function add_privilege()
     }
 
     dataPrivModified = Object.assign(dataPrivModified, rq2);
-    $(".privileges_select").html(selectPrivileges(dataPrivModified));
+    propHtml(".privileges_select", selectPrivileges(dataPrivModified));
 
-    $(".privileges_select").val(pname);
+    propVal(".privileges_select", pname);
     document.querySelector(".privileges_select").dispatchEvent(new Event("change"));
 }
 
@@ -602,8 +599,8 @@ function remove_privilege()
     pname = select.value;
     delete dataPrivModified[pname];
 
-    $(".privileges_select").html(selectPrivileges(dataPrivModified));
-    $(".privileges_group").html(privilegesGroup(dataPrivModified[select.value]));
+    propHtml(".privileges_select", selectPrivileges(dataPrivModified));
+    propHtml(".privileges_group", privilegesGroup(dataPrivModified[select.value]));
 }
 
 function select_propertie(propertie, btn){
@@ -654,60 +651,49 @@ function aply_privilege()
 
 function invoque_set_metadata(params,callback_success, callback_fail)
 {
-    $.ajax({
-        type: "POST",
-        url: this.folder+"set.fso",
-        data: JSON.stringify(params),
-        contentType: "application/json; charset=utf-8",
-        dataType: "json",
-        success: function(r){
-            var res = JSON.parse(JSON.stringify(r));
-
-            if (res.success)
-            {
-                if (callback_success)
-                    callback_success(res.data);
-            }
-            else
-            {
-                if (callback_fail)
-                    callback_fail(res.message);
-            }
-        },
-        error: function(r){
-            alert("Ocurrió un error al invocar el servicio.\n\r"+r.statusText);
+    fetch(this.folder+"set.fso", {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=utf-8", "Accept": "application/json" },
+        body: JSON.stringify(params)
+    })
+    .then(r => { if (!r.ok) throw r; return r.json(); })
+    .then(res => {
+        if (res.success)
+        {
+            if (callback_success)
+                callback_success(res.data);
         }
-    }).always(function(){
-        location.reload();
-    });
+        else
+        {
+            if (callback_fail)
+                callback_fail(res.message);
+        }
+    })
+    .catch(r => { alert("Ocurrió un error al invocar el servicio.\n\r"+((r && (r.statusText || r.message)) || "")); })
+    .finally(() => { location.reload(); });
 }
 
 
 function invoque_set_privileges(params,callback_success, callback_fail)
 {
-    $.ajax({
-        type: "POST",
-        url: this.folder+"set.fso",
-        data: JSON.stringify(params),
-        contentType: "application/json; charset=utf-8",
-        dataType: "json",
-        success: function(r){
-            var res = JSON.parse(JSON.stringify(r));
-            if (res.success)
-            {
-                if (callback_success)
-                    callback_success(res.data);
-            }
-            else
-            {
-                if (callback_fail)
-                    callback_fail(res.message);
-            }
-        },
-        error: function(r){
-            alert("Ocurrió un error al invocar el servicio.\n\r"+r.statusText);
+    fetch(this.folder+"set.fso", {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=utf-8", "Accept": "application/json" },
+        body: JSON.stringify(params)
+    })
+    .then(r => { if (!r.ok) throw r; return r.json(); })
+    .then(res => {
+        if (res.success)
+        {
+            if (callback_success)
+                callback_success(res.data);
         }
-    }).always(function(){
-        location.reload();
-    });
+        else
+        {
+            if (callback_fail)
+                callback_fail(res.message);
+        }
+    })
+    .catch(r => { alert("Ocurrió un error al invocar el servicio.\n\r"+((r && (r.statusText || r.message)) || "")); })
+    .finally(() => { location.reload(); });
 }

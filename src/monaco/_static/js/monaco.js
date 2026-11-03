@@ -12,10 +12,8 @@ function init_monaco()
         _monacoEditor.getModel().onDidChangeContent((event) => {
         _monacoIsDirty=_monacoVID!=_monacoEditor.getModel().getAlternativeVersionId();
         
-        if (_monacoIsDirty) 
-            $("#isdirty").html("Sucio!");
-        else
-            $("#isdirty").html("");
+        var isdirty = document.getElementById("isdirty");
+        if (isdirty) isdirty.innerHTML = _monacoIsDirty ? "Sucio!" : "";
 
         });
     }
@@ -30,7 +28,8 @@ function change_lang(lang)
 
 function reziseEditor()
 {
-    $("#_code_editor").height(window.innerHeight-_monaco_margin);
+    var code_editor = document.getElementById("_code_editor");
+    if (code_editor) code_editor.style.height = (window.innerHeight-_monaco_margin) + "px";
     if (_monacoEditor!=null)
         _monacoEditor.layout();
 }
@@ -47,30 +46,31 @@ function save(callback_success, callback_fail)
 {
     var params={".":{text:_monacoEditor.getValue()}};
 
-    $.ajax({
-        type: "POST",
-        url: _monaco_uri,
-        data: JSON.stringify(params),
-        contentType: "application/json; charset=utf-8",
-        dataType: "json",
-        success: function(r){
-            var res = JSON.parse(JSON.stringify(r));
-            if (res.success)
-            {
-                if (callback_success)
-                    callback_success(res.data);
-            }
-            else
-            {
-                if (callback_fail)
-                    callback_fail(res.message);
-            }
-        },
-        error: function(r){
-            alert("Ocurrió un error al invocar el servicio."+r);
+    fetch(_monaco_uri, {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=utf-8", "Accept": "application/json" },
+        body: JSON.stringify(params)
+    })
+    .then(function(r){
+        if (!r.ok) throw r;
+        return r.json();
+    })
+    .then(function(res){
+        if (res.success)
+        {
+            if (callback_success)
+                callback_success(res.data);
         }
-
-    }).always(function(){
+        else
+        {
+            if (callback_fail)
+                callback_fail(res.message);
+        }
+    })
+    .catch(function(r){
+        alert("Ocurrió un error al invocar el servicio."+r);
+    })
+    .finally(function(){
         location.reload();
     });
 }
@@ -85,26 +85,16 @@ function quit(path){
 
 
 
-function myJQueryCode() {
-    $(document).ready(() => {
-        $(document).ready(function(){
-            reziseEditor();
-            window.onresize=function(){
-                reziseEditor();
-            };
-        
-            init_monaco(); 
-            });
-    });
+function monacoStart() {
+    reziseEditor();
+    window.onresize=function(){
+        reziseEditor();
+    };
+
+    init_monaco();
 }
-    
-if(typeof jQuery=='undefined') {
-    var headTag = document.getElementsByTagName("head")[0];
-    var jqTag = document.createElement('script');
-    jqTag.type = 'text/javascript';
-    jqTag.src = 'https://code.jquery.com/jquery-3.6.0.min.js';
-    jqTag.onload = myJQueryCode;
-    headTag.appendChild(jqTag);
-} else {
-        myJQueryCode();
-}
+
+if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", monacoStart);
+else
+    monacoStart();
