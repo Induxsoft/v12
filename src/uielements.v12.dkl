@@ -38,6 +38,20 @@ module
         do @context.end()
     }
 
+    // EdiTable 2 (D18): valor de un atributo opcional de table_definition o de una columna; "" si el campo no viene
+    function uie.dbeditable_attr(&def, name)
+    {
+        if not(field.exist(def, name)) { return "" }
+        return trim(@@(def, "$"+name))
+    }
+
+    // Igual, para atributos de sí o no: "true", "false" o "" si el campo no viene
+    function uie.dbeditable_battr(&def, name)
+    {
+        if not(field.exist(def, name)) { return "" }
+        return ifstr(parse.bool(@@(def, "$"+name)), "true", "false")
+    }
+
     function uie.dbeditable(&table_definition, table_id)
     {
         if trim(table_id) == "" { table_id = cut("table_"+uuid(),12) }
@@ -68,6 +82,20 @@ module
             table_definition<"table_footer"> : field.dstr(table_definition,"leyend","Mostrando los primeros # registros ordenados por código")
         }
 
+        // EdiTable 2 (D18): atributos opcionales de la tabla; sin el campo, el atributo no se escribe
+        et_group_panel = uie.dbeditable_battr(table_definition, "group-panel")
+        et_group_summary = uie.dbeditable_attr(table_definition, "group-summary")
+        et_multi_select = uie.dbeditable_attr(table_definition, "multi-select")
+        // checkbox o row; un sí (true, 1) equivale a checkbox y un no lo omite
+        if et_multi_select != "" && et_multi_select != "checkbox" && et_multi_select != "row" { et_multi_select = ifstr(parse.bool(et_multi_select), "checkbox", "") }
+        et_column_chooser = uie.dbeditable_battr(table_definition, "column-chooser")
+        et_column_reorder = uie.dbeditable_battr(table_definition, "column-reorder")
+        et_design_auto_save = uie.dbeditable_battr(table_definition, "design-auto-save")
+        et_design_key = uie.dbeditable_attr(table_definition, "design-key")
+        et_virtual_rows = uie.dbeditable_battr(table_definition, "virtual-rows")
+        et_row_height = uie.dbeditable_attr(table_definition, "row-height")
+        et_summary_scope = uie.dbeditable_attr(table_definition, "summary-scope")
+
         control_styles = @@(table_definition,'$control_styles')
         tableLeyend = @@(table_definition, "$table_footer")
 
@@ -81,6 +109,16 @@ module
                     "#<ifstr(show_tree || pagination, '', 'data')>"='#<to.json(datatable)>'
                     "#<tree_opt>"=""
                     "hidde-selector"="true" "cards-responsive"="true" style="width:100%;"
+                    "#<ifstr(et_group_panel!='','group-panel','')>"="#<et_group_panel>"
+                    "#<ifstr(et_group_summary!='','group-summary','')>"="#<et_group_summary>"
+                    "#<ifstr(et_multi_select!='','multi-select','')>"="#<et_multi_select>"
+                    "#<ifstr(et_column_chooser!='','column-chooser','')>"="#<et_column_chooser>"
+                    "#<ifstr(et_column_reorder!='','column-reorder','')>"="#<et_column_reorder>"
+                    "#<ifstr(et_design_auto_save!='','design-auto-save','')>"="#<et_design_auto_save>"
+                    "#<ifstr(et_design_key!='','design-key','')>"="#<et_design_key>"
+                    "#<ifstr(et_virtual_rows!='','virtual-rows','')>"="#<et_virtual_rows>"
+                    "#<ifstr(et_row_height!='','row-height','')>"="#<et_row_height>"
+                    "#<ifstr(et_summary_scope!='','summary-scope','')>"="#<et_summary_scope>"
                     "control-styles"="
                         div:has(table##<table_id>) { overflow:revert !important; }
                         ##<table_id> tr th { font-weight:var(--et-header-weight, var(--et-t-header-weight, 500)); }
@@ -113,6 +151,15 @@ module
                                 maxwidth = ifstr(field.exist(opt,"max-width"), @@(opt,"$max-width"), @@(opt,"$maxwidth"))
                                 maxlength = ifstr(field.exist(opt,"max-length"), @@(opt,"$max-length"), @@(opt,"$maxlength"))
                                 template = @@(opt,'$template') // Establecer contenido de la columna sin tomar de la lista de objetos.
+                                // EdiTable 2 (D18): totales, columna fija y opciones del selector, del reordenamiento y de la agrupación
+                                c_summary = uie.dbeditable_attr(opt, "summary")
+                                c_summary_label = uie.dbeditable_attr(opt, "summary-label")
+                                c_summary_format = uie.dbeditable_attr(opt, "summary-format")
+                                c_fixed = uie.dbeditable_attr(opt, "fixed")
+                                if c_fixed != "" && c_fixed != "left" { c_fixed = ifstr(parse.bool(c_fixed), "left", "") } // EdiTable solo fija a la izquierda
+                                c_chooser = uie.dbeditable_battr(opt, "chooser")
+                                c_reorder = uie.dbeditable_battr(opt, "reorder")
+                                c_groupable = uie.dbeditable_battr(opt, "groupable")
                                 
                                 // Definición de columnas
                                 #$
@@ -131,6 +178,13 @@ module
                                     "#<ifstr(maxwidth!='','maxwidth','')>"="#<maxwidth>"
                                     "#<ifstr(maxlength!='','maxlength','')>"="#<maxlength>"
                                     "#<ifstr(template!='','template','')>"="#<template>"
+                                    "#<ifstr(c_summary!='','summary','')>"="#<c_summary>"
+                                    "#<ifstr(c_summary_label!='','summary-label','')>"="#<c_summary_label>"
+                                    "#<ifstr(c_summary_format!='','summary-format','')>"="#<c_summary_format>"
+                                    "#<ifstr(c_fixed!='','fixed','')>"="#<c_fixed>"
+                                    "#<ifstr(c_chooser!='','chooser','')>"="#<c_chooser>"
+                                    "#<ifstr(c_reorder!='','reorder','')>"="#<c_reorder>"
+                                    "#<ifstr(c_groupable!='','groupable','')>"="#<c_groupable>"
                                 ){$"#<@@(opt,'caption')>"}
                             }
                         }
