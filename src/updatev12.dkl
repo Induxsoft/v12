@@ -309,6 +309,7 @@ module ""
     
 
     do Log("> Obtener paquetes instalados")
+    // También los de sys_packs sin filas en sys_app_catalog (por ejemplo ecommerce), que si no nunca se actualizan (v12_qa#5)
     ref @paquetes=dbr.list(db,"SELECT DISTINCT
             COALESCE(p.pack, a.pack_id) AS pack_id,
 
@@ -323,11 +324,29 @@ module ""
                 WHERE l.source LIKE CONCAT('%', COALESCE(p.pack, a.pack_id), '%')
                 ORDER BY l.sys_dtcreated DESC
                 LIMIT 1
-            ) AS last_install
+            ) AS last_install,
+
+            0 AS sin_catalogo
 
         FROM sys_app_catalog a
         LEFT JOIN sys_packs p 
-        ON p.pack = a.pack_id;",@null)
+        ON p.pack = a.pack_id
+
+        UNION
+
+        SELECT
+            p.pack AS pack_id,
+            COALESCE(p.schema_ver, '') AS schema_ver,
+            (
+                SELECT trim(l.sys_dtcreated)
+                FROM sys_model_log l
+                WHERE l.source LIKE CONCAT('%', p.pack, '%')
+                ORDER BY l.sys_dtcreated DESC
+                LIMIT 1
+            ) AS last_install,
+            1 AS sin_catalogo
+        FROM sys_packs p
+        WHERE NOT EXISTS (SELECT 1 FROM sys_app_catalog a WHERE a.pack_id = p.pack);",@null)
 
     // descargar archivo de manifiesto
     
@@ -417,6 +436,13 @@ module ""
             @install_pack=version.compare(version_schema,version_schema_manifest) == 2
 
             if version_schema_manifest == ""{@install_pack=@true}
+        }
+        // Sin aplicaciones y fuera de la fuente (p. ej. sbp, vdkv12): no se reinstala en cada corrida (v12_qa#5)
+        if (@@(paquete,"#sin_catalogo")==1) && isnull(@manifiesto)
+        {
+            do Log(">> "+id_pack+": sin aplicaciones y no está en "+@manifest_file+" de la fuente; no se actualiza")
+            @deploy_pack=@false
+            @install_pack=@false
         }
         do Log(">> Requiere deploy: "+ifstr(@deploy_pack,'SÍ','NO'))
         do Log(">> Requiere instalación: "+ifstr(@install_pack,'SÍ','NO'))
