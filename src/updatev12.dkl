@@ -53,8 +53,9 @@ module ""
             {
                 do Log(">> Manifiesto encontrado: "+id_pack)
                 packs_to_install=packs_to_install+id_pack +","
-                ref pack_obj=get.pack(pack)
-                
+                // El paquete instalado se busca por el id del manifiesto, no por el zip (movinv.zip -> inventario, T013)
+                ref pack_obj=get.pack(trim(@@(manifest,"$id")))
+
                 if not(isnull(pack_obj))
                 {
                     version=@@(manifest,"$version")
