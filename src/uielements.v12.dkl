@@ -64,8 +64,7 @@ module
         show_tree = parse.bool(@@(table_definition,"$show-tree"))
         tree_opt = ''
         expanded = @false
-        pagination = not(show_tree) && parse.bool(@@(table_definition,"$pagination"))
-        rows_per_page = field.dnum(table_definition,"rows_per_page",250)
+        // D53: sin paginación; si un paquete aún pasa $pagination o rows_per_page, se ignoran y se muestran todas las filas
 
         if show_tree
         {
@@ -78,8 +77,9 @@ module
         }
         
         // Previsión de error ortográfico leyend por legend
+        // D53: sin tope de filas no hay leyenda por omisión; el paquete la pasa (table_footer o leyend) solo al alcanzar su tope
         if not(field.exist(table_definition,"table_footer")) {
-            table_definition<"table_footer"> : field.dstr(table_definition,"leyend","Mostrando los primeros # registros ordenados por código")
+            table_definition<"table_footer"> : field.dstr(table_definition,"leyend","")
         }
 
         // EdiTable 2 (D18): atributos opcionales de la tabla; sin el campo, el atributo no se escribe
@@ -106,7 +106,7 @@ module
             {
                 "edit-table"(
                     id="#<table_id>"
-                    "#<ifstr(show_tree || pagination, '', 'data')>"='#<to.json(datatable)>'
+                    "#<ifstr(show_tree, '', 'data')>"='#<to.json(datatable)>'
                     "#<tree_opt>"=""
                     "hidde-selector"="true" "cards-responsive"="true" style="width:100%;"
                     "#<ifstr(et_group_panel!='','group-panel','')>"="#<et_group_panel>"
@@ -201,18 +201,13 @@ module
             else {
                 #$ small(class="text-secondary hide-on-print" id="#<table_id>_leyend"){$"#<replace(tableLeyend,'#',lenght)>"}
             }
-            #!
-            if pagination {
-                #$ div(id="#<table_id>_pagination" class="d-flex justify-content-center align-items-center gap-1 py-2"){""}
-            }
             #$
             
             script(type="text/javascript" id="uie.dbeditable-script")
             {$'
                 document.addEventListener("DOMContentLoaded", () => {
                     const table = document.getElementById("#<table_id>");
-                    const data = #<to.json(datatable)>;
-                    const pages = {};
+                    const data = #<ifstr(show_tree, to.json(datatable), "[]")>;
                     
                     if (table)
                     {
@@ -228,146 +223,17 @@ module
                             table._expandOnStart = #<expanded>;
                             table._printTreeData();
                         }
-                        // Paginación
-                        if (#<pagination>)
-                        {
-                            let perPage = #<rows_per_page>
-                            let numItems = data.length
-                            let numPages = Math.ceil(numItems / perPage)
-                            let currentPage = 1
-
-                            for (let i = 0; i < numItems; i += perPage) {
-                                pages[Object.keys(pages).length + 1] = data.slice(i, i + perPage)
-                            }
-
-                            const renderPagination = () =>
-                            {
-                                const container = document.getElementById("#<table_id>_pagination")
-
-                                if (!container || numPages <= 1) return
-
-                                let html = ""
-
-                                html += `
-                                    <button type="button"
-                                        class="btn btn-sm btn-outline-secondary"
-                                        ${currentPage === 1 ? "disabled" : ""}
-                                        onclick="pagination.goto(${currentPage - 1})">
-                                        &lt;
-                                    </button>
-                                `
-
-                                if (numPages <= 5)
-                                {
-                                    for (let page = 1; page <= numPages; page++)
-                                    {
-                                        html += `
-                                            <button type="button"
-                                                class="btn btn-sm ${page === currentPage ? "btn-secondary" : "btn-outline-secondary"}"
-                                                onclick="pagination.goto(${page})">
-                                                ${page}
-                                            </button>
-                                        `
-                                    }
-                                }
-                                else
-                                {
-                                    html += `
-                                        <button type="button"
-                                            class="btn btn-sm ${currentPage === 1 ? "btn-secondary" : "btn-outline-secondary"}"
-                                            onclick="pagination.goto(1)">
-                                            1
-                                        </button>
-                                    `
-
-                                    if (currentPage > 3)
-                                        html += `<span class="px-1">...</span>`
-
-                                    let start = Math.max(2, currentPage - 1)
-                                    let end = Math.min(numPages - 1, currentPage + 1)
-
-                                    if (currentPage <= 3)
-                                    {
-                                        start = 2
-                                        end = 3
-                                    }
-
-                                    if (currentPage >= numPages - 2)
-                                    {
-                                        start = numPages - 2
-                                        end = numPages - 1
-                                    }
-
-                                    for (let page = start; page <= end; page++)
-                                    {
-                                        html += `
-                                            <button type="button"
-                                                class="btn btn-sm ${page === currentPage ? "btn-secondary" : "btn-outline-secondary"}"
-                                                onclick="pagination.goto(${page})">
-                                                ${page}
-                                            </button>
-                                        `
-                                    }
-
-                                    if (currentPage < numPages - 2)
-                                        html += `<span class="px-1">...</span>`
-
-                                    html += `
-                                        <button type="button"
-                                            class="btn btn-sm ${currentPage === numPages ? "btn-secondary" : "btn-outline-secondary"}"
-                                            onclick="pagination.goto(${numPages})">
-                                            Último
-                                        </button>
-                                    `
-                                }
-
-                                html += `
-                                    <button type="button"
-                                        class="btn btn-sm btn-outline-secondary"
-                                        ${currentPage === numPages ? "disabled" : ""}
-                                        onclick="pagination.goto(${currentPage + 1})">
-                                        &gt;
-                                    </button>
-                                `
-
-                                container.innerHTML = html
-                            }
-
-                            window.pagination = {
-                                goto: (numPage) =>
-                                {
-                                    if (numPage < 1 || numPage > numPages) return
-                                    
-                                    const leyend = document.getElementById("#<table_id>_leyend")
-                                    currentPage = numPage
-
-                                    table.DataArray = pages[numPage] ?? []
-                                    if (leyend)
-                                    {
-                                        let start = (numPage - 1) * perPage
-                                        let end = start + table.DataArray.length
-                                        let text = "Mostrando registros: " + start +" a "+ end +" de "+ numItems
-                                        leyend.textContent = text
-                                    }
-                                    table._printRows()
-
-                                    renderPagination()
-                                }
-                            }
-
-                            table.removeAttribute("data")
-                            pagination.goto(1)
-                        }
-
+                        // D53: la leyenda la decide el paquete (vacía salvo al alcanzar el tope); al ordenar solo se
+                        // actualiza el criterio de orden de la que ya había, sin crearla ni reescribirla
                         table.Events[table.EdiTable.Const.Events.OnSort] = (e) =>
                         {
                             const table_leyend = document.getElementById("#<table_id>_leyend");
-                            let length = (table?.DataArray ?? []).length;
-                            let leyend = "No se encontraron resultados.";
-
-                            if (length > 0) leyend = "Mostrando los primeros "+length+" registros";
-                            if (e && length > 0) leyend += " ordenados por "+e.caption+" "+e.coldef.sort;
-
+                            if (!table_leyend) return;
+                            if (table_leyend.dataset.base === undefined) table_leyend.dataset.base = table_leyend.textContent.trim();
+                            const base = table_leyend.dataset.base.replace(/(,? +orden: .*| +ordenad[oa]s por .*)$/i, "");
+                            if (base === "") return;
+                            let leyend = base;
+                            if (e && e.caption) leyend += ", orden: " + e.caption + (e.coldef?.sort ? " " + e.coldef.sort : "");
                             table_leyend.textContent = leyend;
                         }
                     }

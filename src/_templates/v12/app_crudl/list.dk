@@ -14,7 +14,7 @@ module "list.dk"
     new table_definition
     {
         @"datatable*": @('&./')
-        @"table_footer": "Mostrando los primeros # registros ordenadas por código"
+        @"table_footer": "" // D53: sin tope de filas; poner la leyenda solo al alcanzar un tope
         member @"columns"
         {
             member @"sys_pk" { @"caption":"Llave Primaria" }
