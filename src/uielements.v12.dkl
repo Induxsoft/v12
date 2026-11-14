@@ -52,6 +52,57 @@ module
         return ifstr(parse.bool(@@(def, "$"+name)), "true", "false")
     }
 
+    // UX escritorio: texto de una constante de catálogo (cFactura → Factura, cCon_adeudo → Con adeudo); lo demás igual
+    function uie.const_texto(t)
+    {
+        if length(t) < 2 { return t }
+        if substring(t,0,1) != "c" { return t }
+        c2 = substring(t,1,1)
+        if c2 == tolower(c2) { return t }
+        r = replace(substring(t,1,length(t)-1),"_"," ")
+        return toupper(substring(r,0,1)) + tolower(substring(r,1,length(r)-1))
+    }
+
+    // UX escritorio: reglas de EdiTable que pintan como píldora los estados conocidos (diccionario común de tonos:
+    // ok verde, warn ámbar, err rojo, info azul, muted gris), sobre el texto ya traducido
+    function uie.const_reglas()
+    {
+        new tonos
+        {
+            @"cContado": "ok"
+            @"cCrédito": "info"
+            @"cSaldado": "ok"
+            @"cCon_adeudo": "warn"
+            @"cVencido": "err"
+            @"cConsignado": "info"
+            @"cPor_facturar": "warn"
+            @"cFacturado": "ok"
+            @"cAbierto": "info"
+            @"cProcesado": "ok"
+            @"cCerrado": "muted"
+            @"cCancelado": "err"
+            @"cPor_entregar": "warn"
+            @"cEntregado": "ok"
+            @"cEntrega_parcial": "info"
+            @"cPendiente": "warn"
+            @"cAutorizado": "ok"
+            @"cRechazado": "err"
+            @"cNo_aplica": "muted"
+        }
+        ref reglas = list.create()
+        go foreach.fstr(index:i, key:k, value:tono) with(tonos)
+        {
+            new regla
+            {
+                @"op": "eq"
+                @"value": uie.const_texto(k)
+                @"pill": tono
+            }
+            do list.add(reglas, regla)
+        }
+        return to.json(reglas)
+    }
+
     function uie.dbeditable(&table_definition, table_id)
     {
         if trim(table_id) == "" { table_id = cut("table_"+uuid(),12) }
@@ -95,6 +146,61 @@ module
         et_virtual_rows = uie.dbeditable_battr(table_definition, "virtual-rows")
         et_row_height = uie.dbeditable_attr(table_definition, "row-height")
         et_summary_scope = uie.dbeditable_attr(table_definition, "summary-scope")
+        // UX escritorio: agrupación inicial (campos separados por coma); el diseño guardado del usuario manda
+        et_group_by = uie.dbeditable_attr(table_definition, "group-by")
+
+        // UX escritorio: columnas con @"const" o @"pill" muestran la constante traducida; las de @"pill", además, como
+        // píldora de color según el diccionario común (uie.const_reglas)
+        new const_cols { }
+        hay_const = @false
+        reglas_pill = ""
+        codeblock
+        {
+            ref ccols = @@(table_definition,"&columns")
+            go foreach.fobj(index:ci, key:ckey, value:copt) with(ccols)
+            {
+                if parse.bool(@@(copt,"$pill")) || parse.bool(@@(copt,"$const"))
+                {
+                    const_cols<ckey>: "1"
+                    hay_const = @true
+                }
+                if parse.bool(@@(copt,"$pill")) && reglas_pill == "" { reglas_pill = uie.const_reglas() }
+            }
+            if hay_const
+            {
+                // (sin go anidados: el go interno no ve las variables que expone foreach.fstr)
+                for ri=0; ri<list.count(datatable)
+                {
+                    ref fila = list.obj(datatable, ri)
+                    go foreach.fstr(index:cj, key:ck, value:cv) with(const_cols)
+                    {
+                        if field.exist(fila, ck) { fila<ck>: uie.const_texto(field.dstr(fila, ck, "")) }
+                    }
+                }
+            }
+            exception { do clear_exceptions() }
+        }
+
+        // UX escritorio: en las listas, celdas de una línea con «…» y tooltip (EdiTable cell-overflow); el paquete puede
+        // pasar "wrap" para conservar el ajuste de líneas
+        et_cell_overflow = uie.dbeditable_attr(table_definition, "cell-overflow")
+        if et_cell_overflow == "" { et_cell_overflow = "ellipsis" }
+
+        // UX escritorio: la tabla de una vista de lista (sin _entity_id ni _view) se marca para que webshell.views.js la
+        // estire hasta abajo de la vista en pantalla ancha; "fit-height" en la definición lo fuerza (sí) o lo quita (no)
+        fit_list = @false
+        codeblock
+        {
+            ref uie_hc = @null
+            if isset("@http_context") { ref uie_hc = @http_context }
+            else if isset("@crud_context") { ref uie_hc = @@(@crud_context,"&http") }
+            if not(isnull(uie_hc))
+            {
+                if @@(uie_hc,"$request/get/_pack") != "" && @@(uie_hc,"$request/get/_entity_id") == "" && @@(uie_hc,"$request/get/_view") == "" { fit_list = @true }
+            }
+            exception { do clear_exceptions() }
+        }
+        if field.exist(table_definition, "fit-height") { fit_list = parse.bool(@@(table_definition, "$fit-height")) }
 
         control_styles = @@(table_definition,'$control_styles')
         tableLeyend = @@(table_definition, "$table_footer")
@@ -102,13 +208,14 @@ module
         #$
         div(style="height:100%;")
         {
-            div(style="overflow-y:auto; max-height:#<tableHeight>;" id="list_table_container")
+            div(style="overflow-y:auto; max-height:#<tableHeight>;" id="list_table_container" "#<ifstr(fit_list,'data-v12-fit','')>"="#<ifstr(fit_list,'list','')>")
             {
                 "edit-table"(
                     id="#<table_id>"
                     "#<ifstr(show_tree, '', 'data')>"='#<to.json(datatable)>'
                     "#<tree_opt>"=""
                     "hidde-selector"="true" "cards-responsive"="true" style="width:100%;"
+                    "cell-overflow"="#<et_cell_overflow>"
                     "#<ifstr(et_group_panel!='','group-panel','')>"="#<et_group_panel>"
                     "#<ifstr(et_group_summary!='','group-summary','')>"="#<et_group_summary>"
                     "#<ifstr(et_multi_select!='','multi-select','')>"="#<et_multi_select>"
@@ -119,6 +226,7 @@ module
                     "#<ifstr(et_virtual_rows!='','virtual-rows','')>"="#<et_virtual_rows>"
                     "#<ifstr(et_row_height!='','row-height','')>"="#<et_row_height>"
                     "#<ifstr(et_summary_scope!='','summary-scope','')>"="#<et_summary_scope>"
+                    "#<ifstr(et_group_by!='','group-by','')>"="#<et_group_by>"
                     "control-styles"="
                         div:has(table##<table_id>) { overflow:revert !important; }
                         ##<table_id> tr th { font-weight:var(--et-header-weight, var(--et-t-header-weight, 500)); }
@@ -160,6 +268,8 @@ module
                                 c_chooser = uie.dbeditable_battr(opt, "chooser")
                                 c_reorder = uie.dbeditable_battr(opt, "reorder")
                                 c_groupable = uie.dbeditable_battr(opt, "groupable")
+                                // UX escritorio: reglas de formato de la columna (@"rules", JSON) o las de píldora (@"pill")
+                                c_rules = ifstr(field.exist(opt,"rules"), @@(opt,"$rules"), ifstr(parse.bool(@@(opt,"$pill")), reglas_pill, ""))
                                 
                                 // Definición de columnas
                                 #$
@@ -185,6 +295,7 @@ module
                                     "#<ifstr(c_chooser!='','chooser','')>"="#<c_chooser>"
                                     "#<ifstr(c_reorder!='','reorder','')>"="#<c_reorder>"
                                     "#<ifstr(c_groupable!='','groupable','')>"="#<c_groupable>"
+                                    "#<ifstr(c_rules!='','rules','')>"="#<c_rules>"
                                 ){$"#<@@(opt,'caption')>"}
                             }
                         }
