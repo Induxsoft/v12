@@ -1,0 +1,336 @@
+#include "dkli.dkh"
+#!
+program "v12admin - datos regionales"
+{
+	// Aplica los datos regionales de un perfil de país del instalador (assets.induxsoft.net/installer/v12.<pais>.json,
+	// sección "region") a una base de V12 ya instalada. Se corre desde la raíz de Devkron:
+	//   dkl v12admin/bin/region.dkl qn=<conexión@grupo> perfil=<archivo.json> [pais=COL] [divisa=USD]
+	//       [tz="America/Bogota|-05:00"] [iva=19] [revisar]
+	// - pais, divisa, tz e iva sustituyen lo que sugiere el perfil (los elige el partner en el instalador).
+	// - revisar: solo informa lo que haría; no escribe nada.
+	// Qué hace:
+	//   · Siempre: zona horaria (globalvar FXTZ001), país (V12-00-001) e idioma (V12-00-002).
+	//   · Solo en una base sin movimientos (sin productos, clientes salvo (PG), proveedores, domicilios con ciudad ni documentos): divisa
+	//     base (FXCA013 y tipo de cambio 1), impuestos (impuesto y cfgimpuesto) y estados/ciudades. Si hay
+	//     movimientos no toca nada de eso y lo avisa.
+	//   · Modo "conservar" (perfil de México): deja los datos que cargó catbas.
+	//   · Modo "reemplazar": quita los estados/ciudades de México y los que ya tuviera el país elegido (para poder
+	//     repetirlo; "(Desconocido)" se queda) y carga los del perfil; reescribe cfgimpuesto reutilizando los sys_pk
+	//     existentes en orden (el 1 sigue siendo "Exento").
+	//   · El nombre del identificador fiscal (RFC, NIT, RUC...) no está parametrizado en V12: solo se avisa.
+	// Salida: líneas "V12REGION <clave>: <valor>" y al final "V12REGION=OK", "V12REGION=AVISO <motivo>" o
+	// "V12REGION=ERROR <mensaje>".
+	#include "functions.dkh"
+	#include "serialize.dkh"
+	#include "dbr.dkh"
+
+	ref args = commandline("=")
+	qn = trim(field.dstr(args, "qn", ""))
+	archivo = trim(field.dstr(args, "perfil", ""))
+	@rg_revisar = field.exist(args, "revisar")
+	@rg_avisos = ""
+
+	rg.log::s
+	{
+		do print("V12REGION " + s)
+	}
+
+	rg.aviso::s
+	{
+		do rg.log("aviso: " + s)
+		if @rg_avisos != "" { @rg_avisos = @rg_avisos + "; " }
+		@rg_avisos = @rg_avisos + s
+	}
+
+	// ¿Existe la tabla en la base de la conexión?
+	rg.hay_tabla::&db, t
+	{
+		ref p = record.create()
+		p<"t">: t
+		return dbr.num(db, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=@t", p) > 0
+	}
+
+	// Renglones de las tablas que indican que la base ya se usa (las que no existen no cuentan)
+	rg.movimientos::&db
+	{
+		ref ts = split("producto,cliente,proveedor,domicilio,venta,compra,orden,movcaja,corte,cardex,dcxc,dcxp,movcuenta,minipos_ventas", ",")
+		msg = ""
+		for i=0; i<list.count(ts)
+		{
+			t = list.str(ts, i)
+			if rg.hay_tabla(db, t)
+			{
+				// Lo que crea la instalación no cuenta: el cliente (PG) y su domicilio sin ciudad
+				w = ""
+				if t == "cliente" { w = " WHERE codigo<>'(PG)'" }
+				if t == "domicilio" { w = " WHERE iciudad IS NOT NULL" }
+				n = dbr.num(db, "SELECT COUNT(*) FROM " + t + w, @null)
+				if n > 0
+				{
+					if msg != "" { msg = msg + ", " }
+					msg = msg + t + "=" + str(n)
+				}
+			}
+		}
+		return msg
+	}
+
+	rg.set_var::&db, nombre, valor
+	{
+		ref p = record.create()
+		p<"n">: nombre
+		p<"v">: valor
+		if dbr.num(db, "SELECT COUNT(*) FROM globalvar WHERE varname=@n", p) < 1
+		{
+			do rg.aviso("no existe la variable " + nombre)
+			return
+		}
+		ant = dbr.str(db, "SELECT IFNULL(varvalue,'') FROM globalvar WHERE varname=@n", p)
+		do rg.log(nombre + ": " + ant + " -> " + valor)
+		if not(@rg_revisar) { do dbr.execute(db, "UPDATE globalvar SET varvalue=@v, sys_timestamp=NOW() WHERE varname=@n", p) }
+	}
+
+	// Busca un país en region/paises del perfil
+	rg.pais_perfil::&region, codigo
+	{
+		ref ps = field.dobj(region, "paises", list.create())
+		for i=0; i<list.count(ps)
+		{
+			ref x = list.obj(ps, i)
+			if toupper(field.dstr(x, "codigo", "")) == toupper(codigo) { return x }
+		}
+		return @null
+	}
+
+	// Alta o actualización del país en la tabla pais; devuelve su sys_pk
+	rg.pais_tabla::&db, &pd
+	{
+		ref p = record.create()
+		p<"c">: field.dstr(pd, "codigo", "")
+		p<"n">: field.dstr(pd, "nombre", field.dstr(pd, "codigo", ""))
+		p<"tel">: field.dstr(pd, "codigotel", "")
+		p<"ths">: field.dstr(pd, "th_sep", ",")
+		p<"dcs">: field.dstr(pd, "dc_sep", ".")
+		p<"iso">: field.dstr(pd, "iso3166", "")
+		p<"iso3">: field.dstr(pd, "iso3166_a3", field.dstr(pd, "codigo", ""))
+		pk = dbr.num(db, "SELECT IFNULL(MAX(sys_pk),0) FROM pais WHERE codigo=@c", p)
+		if pk > 0
+		{
+			do rg.log("pais: " + field.dstr(p, "c", "") + " ya existe (sys_pk " + str(pk) + ")")
+			return pk
+		}
+		do rg.log("pais: alta de " + field.dstr(p, "c", "") + " " + field.dstr(p, "n", ""))
+		if @rg_revisar { return 0 }
+		do dbr.execute(db, "INSERT INTO pais (sys_guid, sys_dtcreated, sys_timestamp, sys_recver, codigo, nombre, th_sep, dc_sep, iso3166, iso3166_a3, codigotel) VALUES (UPPER(REPLACE(UUID(),'-','')), NOW(), NOW(), 0, @c, @n, @ths, @dcs, @iso, @iso3, @tel)", p)
+		return dbr.num(db, "SELECT IFNULL(MAX(sys_pk),0) FROM pais WHERE codigo=@c", p)
+	}
+
+	rg.divisa::&db, codigo
+	{
+		ref p = record.create()
+		p<"c">: toupper(codigo)
+		pk = dbr.num(db, "SELECT IFNULL(MAX(sys_pk),0) FROM divisa WHERE codigo=@c", p)
+		if pk < 1 { do rise_error(0, "La divisa " + codigo + " no está en el catálogo de divisas") }
+		p<"pk">: pk
+		do rg.set_var(db, "FXCA013", str(pk))
+		do rg.log("divisa base: " + field.dstr(p, "c", "") + " (sys_pk " + str(pk) + "), tipo de cambio 1")
+		if not(@rg_revisar)
+		{
+			do dbr.execute(db, "UPDATE divisa SET tcambio=1, sys_timestamp=NOW() WHERE sys_pk=@pk", p)
+			// El cliente (PG) que crea la instalación queda en la divisa base
+			if rg.hay_tabla(db, "cliente") { do dbr.execute(db, "UPDATE cliente SET idivisa=@pk, sys_timestamp=NOW() WHERE codigo='(PG)'", p) }
+		}
+		if field.dstr(p, "c", "") != "MXN" { do rg.aviso("revise los tipos de cambio de las demás divisas (vienen respecto al peso mexicano)") }
+	}
+
+	// Sustituye {iva} y demás parámetros en un texto
+	rg.param_txt::s, &prm
+	{
+		r = s
+		ref ks = list.create_from_fields(prm)
+		for i=0; i<list.count(ks)
+		{
+			k = list.str(ks, i)
+			r = replace(r, "{" + k + "}", field.dstr(prm, k, ""))
+		}
+		return r
+	}
+
+	rg.impuestos::&db, &imp, &prm
+	{
+		modo = field.dstr(imp, "modo", "conservar")
+		if modo == "conservar"
+		{
+			do rg.log("impuestos: se conservan los de la instalación")
+			return
+		}
+		ref cat = field.dobj(imp, "catalogo", list.create())
+		ref cfg = field.dobj(imp, "configuraciones", list.create())
+		objimp = field.dstr(imp, "objetoimp", "02")
+		// Catálogo de impuestos: se reemplaza completo (en una base sin productos nada lo referencia)
+		do rg.log("impuesto: se reemplaza por " + str(list.count(cat)) + " renglones")
+		if not(@rg_revisar) { do dbr.execute(db, "DELETE FROM impuesto", @null) }
+		for i=0; i<list.count(cat)
+		{
+			ref x = list.obj(cat, i)
+			ref p = record.create()
+			p<"id">: field.dstr(x, "id", "")
+			p<"d">: field.dstr(x, "descripcion", field.dstr(x, "id", ""))
+			do rg.log("impuesto: " + field.dstr(p, "id", ""))
+			if not(@rg_revisar) { do dbr.execute(db, "INSERT INTO impuesto (sys_guid, sys_dtcreated, sys_timestamp, sys_recver, id, descripcion) VALUES (UPPER(REPLACE(UUID(),'-','')), NOW(), NOW(), 0, @id, @d)", p) }
+		}
+		// Configuraciones: se reutilizan los sys_pk existentes en orden, se borran los sobrantes
+		ref pks = dbr.table(db, "SELECT sys_pk FROM cfgimpuesto ORDER BY sys_pk", @null)
+		npk = table.rows(pks)
+		for i=0; i<list.count(cfg)
+		{
+			ref x = list.obj(cfg, i)
+			tasa = rg.param_txt(field.dstr(x, "tasa", "0"), prm)
+			ref p = record.create()
+			p<"nombre">: rg.param_txt(field.dstr(x, "nombre", ""), prm)
+			p<"tipo">: field.dstr(x, "impuesto", "IVA")
+			p<"cero">: "%0|%0"
+			p<"t">: "%" + tasa + "|%" + tasa
+			p<"exento">: 0
+			if field.dnum(x, "exento", 0) != 0 { p<"exento">: 1 }
+			p<"obj">: field.dstr(x, "objetoimp", objimp)
+			if i < npk
+			{
+				p<"pk">: cell.num(pks, i, 0)
+				do rg.log("cfgimpuesto " + str(field.dnum(p, "pk", 0)) + ": " + field.dstr(p, "nombre", "") + " (" + field.dstr(p, "tipo", "") + " " + tasa + "%)")
+				if not(@rg_revisar) { do dbr.execute(db, "UPDATE cfgimpuesto SET nombre=@nombre, i1compra=@cero, i1venta=@cero, i2compra=@cero, i2venta=@cero, i3compra=@t, i3venta=@t, i4compra=@cero, i4venta=@cero, uf_tipoi1=' ', uf_tipoi2=' ', uf_tipoi3=@tipo, uf_tipoi4=' ', tasa=@exento, objetoimp=@obj, sys_timestamp=NOW() WHERE sys_pk=@pk", p) }
+			}
+			else
+			{
+				do rg.log("cfgimpuesto nuevo: " + field.dstr(p, "nombre", "") + " (" + field.dstr(p, "tipo", "") + " " + tasa + "%)")
+				if not(@rg_revisar) { do dbr.execute(db, "INSERT INTO cfgimpuesto (sys_guid, sys_dtcreated, sys_timestamp, sys_recver, nombre, i1compra, i1venta, i2compra, i2venta, i3compra, i3venta, i4compra, i4venta, uf_tipoi1, uf_tipoi2, uf_tipoi3, uf_tipoi4, tasa, objetoimp) VALUES (UPPER(REPLACE(UUID(),'-','')), NOW(), NOW(), 0, @nombre, @cero, @cero, @cero, @cero, @t, @t, @cero, @cero, ' ', ' ', @tipo, ' ', @exento, @obj)", p) }
+			}
+		}
+		for i=list.count(cfg); i<npk
+		{
+			ref p = record.create()
+			p<"pk">: cell.num(pks, i, 0)
+			do rg.log("cfgimpuesto " + str(field.dnum(p, "pk", 0)) + ": se elimina")
+			if not(@rg_revisar) { do dbr.execute(db, "DELETE FROM cfgimpuesto WHERE sys_pk=@pk", p) }
+		}
+	}
+
+	rg.estados::&db, &est, pkpais, codpais
+	{
+		modo = field.dstr(est, "modo", "conservar")
+		if modo == "conservar"
+		{
+			do rg.log("estados y ciudades: se conservan los de la instalación")
+			return
+		}
+		// Quita los de México y los que ya tuviera el país elegido (para poder repetir); "(Desconocido)" se queda
+		ref pp = record.create()
+		pp<"cp">: codpais
+		n = dbr.num(db, "SELECT COUNT(*) FROM edoprov e INNER JOIN pais p ON p.sys_pk=e.ipais WHERE p.codigo IN ('MEX', @cp)", pp)
+		do rg.log("estados que se quitan (México y " + codpais + "): " + str(n))
+		if not(@rg_revisar)
+		{
+			do dbr.execute(db, "DELETE c FROM ciudad c INNER JOIN edoprov e ON e.sys_pk=c.estado INNER JOIN pais p ON p.sys_pk=e.ipais WHERE p.codigo IN ('MEX', @cp)", pp)
+			do dbr.execute(db, "DELETE e FROM edoprov e INNER JOIN pais p ON p.sys_pk=e.ipais WHERE p.codigo IN ('MEX', @cp)", pp)
+		}
+		ref lista = field.dobj(est, "lista", list.create())
+		for i=0; i<list.count(lista)
+		{
+			ref x = list.obj(lista, i)
+			ref p = record.create()
+			p<"c">: field.dstr(x, "codigo", "")
+			p<"n">: field.dstr(x, "nombre", "")
+			p<"ip">: pkpais
+			ref cs = field.dobj(x, "ciudades", list.create())
+			do rg.log("estado: " + field.dstr(p, "c", "") + " " + field.dstr(p, "n", "") + " (" + str(list.count(cs)) + " ciudades)")
+			if not(@rg_revisar)
+			{
+				do dbr.execute(db, "INSERT INTO edoprov (sys_guid, sys_dtcreated, sys_timestamp, sys_recver, codigo, nombre, ipais) VALUES (UPPER(REPLACE(UUID(),'-','')), NOW(), NOW(), 0, @c, @n, @ip)", p)
+				pke = dbr.num(db, "SELECT MAX(sys_pk) FROM edoprov WHERE codigo=@c AND ipais=@ip", p)
+				for j=0; j<list.count(cs)
+				{
+					ref y = list.obj(cs, j)
+					ref q = record.create()
+					q<"c">: field.dstr(y, "codigo", "")
+					q<"n">: field.dstr(y, "nombre", "")
+					q<"tel">: field.dstr(y, "codigotel", "")
+					q<"e">: pke
+					do dbr.execute(db, "INSERT INTO ciudad (sys_guid, sys_dtcreated, sys_timestamp, sys_recver, codigo, codigotel, nombre, estado) VALUES (UPPER(REPLACE(UUID(),'-','')), NOW(), NOW(), 0, @c, @tel, @n, @e)", q)
+				}
+			}
+		}
+	}
+
+	// ---- Programa ----
+	if qn == "" || archivo == "" { do rise_error(0, "Uso: dkl v12admin/bin/region.dkl qn=<conexión@grupo> perfil=<archivo.json> [pais=] [divisa=] [tz=] [iva=] [revisar]") }
+	if not(file.exists(archivo)) { do rise_error(0, "No existe el perfil " + archivo) }
+	ref perfil = from.json(file.rtext(archivo))
+	ref region = field.dobj(perfil, "region", @null)
+	if isnull(region) { do rise_error(0, "El perfil no tiene la sección region") }
+
+	// País: el del argumento o el predeterminado del perfil
+	codpais = toupper(trim(field.dstr(args, "pais", field.dstr(region, "pais", ""))))
+	ref pd = rg.pais_perfil(region, codpais)
+	if isnull(pd) { do rise_error(0, "El país " + codpais + " no está en region/paises del perfil") }
+	divisa = toupper(trim(field.dstr(args, "divisa", field.dstr(region, "divisa_base/codigo", field.dstr(pd, "divisa", "")))))
+	tz = trim(field.dstr(args, "tz", field.dstr(pd, "zona_horaria", field.dstr(region, "zona_horaria/valor", ""))))
+	idioma = field.dstr(region, "idioma", "es")
+	// Parámetros de impuestos (p. ej. iva): valor del perfil, sustituible por argumento
+	ref prm = record.create()
+	ref pdef = field.dobj(region, "impuestos/parametros", record.create())
+	ref pks = list.create_from_fields(pdef)
+	for i=0; i<list.count(pks)
+	{
+		k = list.str(pks, i)
+		prm<k>: field.dstr(args, k, field.dstr(pd, "impuestos/" + k, field.dstr(pdef, k + "/valor", "")))
+	}
+
+	ref db = dbr.open(qn)
+	do rg.log("base: " + dbr.str(db, "SELECT DATABASE()", @null) + ifstr(@rg_revisar, " (solo revisar)", ""))
+	do rg.log("perfil: " + field.dstr(perfil, "pais", "") + " " + field.dstr(perfil, "nombre", "") + ", país " + codpais)
+	if not(rg.hay_tabla(db, "globalvar")) || not(rg.hay_tabla(db, "divisa")) || not(rg.hay_tabla(db, "cfgimpuesto"))
+	{
+		do rise_error(0, "La base no tiene V12 con catbas instalado")
+	}
+	if not(@rg_revisar) { do dbr.begin(db) }
+
+	// Siempre: zona horaria, país e idioma
+	if tz != "" { do rg.set_var(db, "FXTZ001", tz) }
+	do rg.set_var(db, "V12-00-001", codpais)
+	do rg.set_var(db, "V12-00-002", idioma)
+
+	// Solo sin movimientos: país en catálogo, divisa base, impuestos, estados y ciudades
+	mov = rg.movimientos(db)
+	if mov != ""
+	{
+		do rg.aviso("la base ya tiene movimientos (" + mov + "): no se cambian divisa base, impuestos, estados ni ciudades")
+	}
+	else
+	{
+		pkpais = rg.pais_tabla(db, pd)
+		if divisa != "" { do rg.divisa(db, divisa) }
+		do rg.impuestos(db, field.dobj(region, "impuestos", record.create()), prm)
+		do rg.estados(db, field.dobj(region, "estados", record.create()), pkpais, codpais)
+	}
+
+	idf = field.dstr(pd, "identificador_fiscal", "")
+	if idf != "" && toupper(idf) != "RFC"
+	{
+		do rg.aviso("V12 no parametriza el nombre del identificador fiscal: clientes y proveedores dicen RFC y validan el formato mexicano (" + idf + " con otro formato será rechazado)")
+	}
+
+	if not(@rg_revisar) { do dbr.commit(db) }
+	do dbr.close(db)
+	if @rg_avisos == "" { do print("V12REGION=OK") }
+	else { do print("V12REGION=AVISO " + @rg_avisos) }
+
+	exception
+	{
+		codeblock
+		{
+			do dbr.rollback(db)
+			exception { }
+		}
+		do print("V12REGION=ERROR " + last_error())
+	}
+}
