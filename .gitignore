@@ -8,3 +8,14 @@ tools/filemirror/filemirror/bin/Debug/net5.0/filemirror.runtimeconfig.dev.json
 tools/filemirror/filemirror/bin/Debug/net5.0/filemirror.runtimeconfig.json
 tools/filemirror/filemirror/bin/Debug/net5.0/ref/filemirror.dll
 /tools/filemirror/filemirror/obj
+# D104: configuración local que nunca va en el paquete (el zip sobrescribe en la raíz de Devkron lo que trae)
+/src/v12.license.json
+/src/v12.estado.json
+/src/v12.revocada
+/src/v12.lic
+/src/_device.id
+/src/v12admin/v12server.json
+/src/v12admin/datos/
+/src/v12admin/dist/
+/src/v12admin/fastcgi/*
+!/src/v12admin/fastcgi/alias.dkl
