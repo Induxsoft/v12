@@ -1,0 +1,102 @@
+#include "dkli.dkh"
+#!
+program "Administrador de V12 Server"
+{
+	// Punto de entrada del administrador: https://v12admin.localhost:<puerto>/admin/?s=<sección>
+	// GET muestra una sección; POST (con token) ejecuta una acción y redirige (PRG) a la sección.
+
+	#include "admin.dkh"
+	#include "sec_licencia.dkh"
+	#include "sec_sitios.dkh"
+	#include "sec_conexiones.dkh"
+	#include "sec_servidor.dkh"
+	#include "sec_servicios.dkh"
+	#include "sec_actualizaciones.dkh"
+	#include "sec_bitacoras.dkh"
+
+	if not(adm.guard())
+	{
+		@http_context<"response/http_status">: 403
+		do adm.texto("text/plain;charset=utf-8", "El administrador de V12 Server solo funciona en el propio servidor (https://v12admin.localhost).")
+		return
+	}
+
+	metodo = toupper(field.dstr(@http_context, "request/headers/request_method", "GET"))
+	seccion = "licencia"
+
+	if metodo == "POST"
+	{
+		if not(adm.token_ok())
+		{
+			@http_context<"response/http_status">: 403
+			do adm.texto("text/plain;charset=utf-8", "Solicitud rechazada: recargue la página del administrador e intente de nuevo.")
+			return
+		}
+		a = adm.post("a")
+		// La sección de destino sale del prefijo; una acción puede cambiarla con @adm_destino
+		// (asignar el resultado de una función que lanzó error a una variable da otro error y tapa el mensaje)
+		@adm_destino = ""
+		if adm.empieza(a, "sit_") { seccion = "sitios" }
+		else if adm.empieza(a, "cnx_") { seccion = "conexiones" }
+		else if adm.empieza(a, "web_") { seccion = "servidor" }
+		else if adm.empieza(a, "svc_") { seccion = "servicios" }
+		else if adm.empieza(a, "upd_") { seccion = "actualizaciones" }
+		codeblock
+		{
+			if adm.empieza(a, "lic_") { do acc.licencia(a) }
+			else if adm.empieza(a, "sit_") { do acc.sitios(a) }
+			else if adm.empieza(a, "cnx_") { do acc.conexiones(a) }
+			else if adm.empieza(a, "web_") { do acc.servidor(a) }
+			else if adm.empieza(a, "svc_") { do acc.servicios(a) }
+			else if adm.empieza(a, "upd_") { do acc.actualizaciones(a) }
+			else { do rise_error(0, "Acción desconocida: " + a) }
+			exception
+			{
+				do adm.aviso("error", last_error())
+				do adm.bitacora("error", a + ": " + last_error())
+			}
+		}
+		if @adm_destino != "" { seccion = @adm_destino }
+		destino = "./?s=" + seccion
+		do adm.redirigir(destino)
+		return
+	}
+
+	s = tolower(adm.get("s"))
+	if s == "" { s = "licencia" }
+
+	// Respuestas que no son páginas
+	if s == "trabajo"
+	{
+		id = adm.get("id")
+		if not(adm.es_host(tolower(replace(id, "_", "-")))) { id = "" }
+		ref te = adm.trabajo_estado(id)
+		do adm.texto("application/json;charset=utf-8", to.json(te))
+		return
+	}
+	if s == "certificado"
+	{
+		do web.descargar_certificado()
+		return
+	}
+	if s == "soporte"
+	{
+		do bit.paquete_soporte()
+		return
+	}
+
+	if s == "licencia" { do adm.pagina(s, "Licencia", sec.licencia()) }
+	else if s == "sitios" { do adm.pagina(s, "Sitios V12", sec.sitios()) }
+	else if s == "conexiones" { do adm.pagina(s, "Conexiones", sec.conexiones()) }
+	else if s == "servidor" { do adm.pagina(s, "Servidor web", sec.servidor()) }
+	else if s == "servicios" { do adm.pagina(s, "Servicios", sec.servicios()) }
+	else if s == "actualizaciones" { do adm.pagina(s, "Actualizaciones", sec.actualizaciones()) }
+	else if s == "bitacoras" { do adm.pagina(s, "Bitácoras", sec.bitacoras()) }
+	else { do adm.redirigir("./?s=licencia") }
+
+	exception
+	{
+		@http_context<"response/http_status">: 500
+		do adm.texto("text/plain;charset=utf-8", "Error del administrador de V12 Server: " + last_error())
+	}
+}

@@ -1,0 +1,192 @@
+#!
+module "Administrador de V12 Server - Conexiones"
+{
+	// Sección Conexiones (SPEC §13): el repositorio local de conexiones de Devkron (connections.xml de la raíz).
+	// Se edita con las funciones dba.* de dbr.dkh (las mismas de la herramienta dba), que guardan XmlSettings cifrado:
+	// por eso no se toca el XML a mano. La contraseña nunca se muestra; vacía al guardar = se conserva.
+	// No se eliminan conexiones desde aquí. La FastCGI de V12 vuelve a leer connections.xml si una conexión
+	// falla y el archivo cambió (novedades de 2.0.2), así que no hace falta reiniciar.
+
+	// Prueba en un proceso aparte (bin/probar-conexion.dkl): Devkron conserva en memoria connections.xml y, después
+	// de editar una conexión, probarla aquí mismo usaría los datos anteriores. "" = conecta.
+	cnx.prueba::qn
+	{
+		out = adm.dkl("v12admin/bin/probar-conexion.dkl qn=" + qn)
+		p = findstr(out, "V12ADMIN_CNX=")
+		if p < 0 { return "sin respuesta: " + trim(out) }
+		r = trim(left(out, p + 13))
+		if adm.empieza(r, "OK") { return "" }
+		return trim(left(r, 5))
+	}
+
+	cnx.addapp::app
+	{
+		ref apps = dba.apps("*")
+		for i=0; i<list.count(apps)
+		{
+			if tolower(trim(list.str(apps, i))) == tolower(app) { return 0 }
+		}
+		do dba.addapp(app)
+	}
+
+	cnx.info::app, nombre, host, puerto, base, usuario, pwd, motor
+	{
+		new info
+		{
+			@"Engine": motor
+			@"Host": host
+			@"Port": puerto
+			@"UserName": usuario
+			@"Password": pwd
+			@"DefaultSchema": base
+		}
+		if motor == "MY_SQL" { info<"SSLMode">: "2" }
+		return info
+	}
+
+	cnx.formulario::accion, qn, &c, titulo
+	{
+		app = ""
+		nombre = ""
+		if qn != ""
+		{
+			nombre = list.str(split(qn, "@"), 0)
+			app = list.str(split(qn, "@"), 1)
+		}
+		motor = field.dstr(c, "Engine", "MY_SQL")
+		f = '<input type="hidden" name="qn" value="' + adm.h(qn) + '">'
+		f = f + '<div class="rejilla2">'
+		if qn == ""
+		{
+			f = f + adm.campo("Nombre", "nombre", "", "text", "Letras, números y _") + adm.campo("Grupo de aplicación", "app", @adm_app, "text", "")
+		}
+		sel = '<label class="campo">Motor<select name="motor"><option value="MY_SQL"' + ifstr(motor == "MY_SQL", " selected", "") + '>MySQL / MariaDB</option><option value="SQL_SERVER"' + ifstr(motor == "SQL_SERVER", " selected", "") + '>SQL Server</option><option value="POSTGRESQL"' + ifstr(motor == "POSTGRESQL", " selected", "") + '>PostgreSQL</option></select></label>'
+		f = f + adm.campo("Servidor", "host", field.dstr(c, "Host", "localhost"), "text", "") + adm.campo("Puerto", "puerto", field.dstr(c, "Port", "3306"), "text", "")
+		f = f + adm.campo("Base de datos", "base", field.dstr(c, "DefaultSchema", ""), "text", "") + adm.campo("Usuario", "usuario", field.dstr(c, "UserName", ""), "text", "")
+		f = f + adm.campo("Contraseña", "pwd", "", "password", ifstr(qn != "", "Déjela vacía para conservar la actual", "")) + sel + '</div>'
+		f = f + '<div class="botones">' + '<button type="submit" class="btn sec" name="probar" value="1">Probar</button>' + adm.boton("Guardar", "pri") + '</div>'
+		return '<section class="tarjeta form" id="editar"><h2>' + adm.h(titulo) + '</h2>' + adm.form(accion, f, "") + '</section>'
+	}
+
+	sec.conexiones::
+	{
+		ref sitios = adm.sitios()
+		h = adm.titulo("Conexiones", "Las conexiones a bases de datos que usan los sitios (connections.xml).", '<a class="btn pri" href="./?s=conexiones&amp;e=nueva#editar">Nueva conexión</a>')
+		h = h + '<section class="tarjeta"><div class="tabla"><table><thead><tr><th>Nombre</th><th>Servidor</th><th>Base</th><th>Usada por</th><th>Estado</th><th><span class="oculto">Acción</span></th></tr></thead><tbody>'
+		ref apps = dba.apps("*")
+		n = 0
+		for i=0; i<list.count(apps)
+		{
+			app = trim(list.str(apps, i))
+			if app != ""
+			{
+				ref cs = dba.cnns(app)
+				for j=0; j<list.count(cs)
+				{
+					qn = trim(list.str(cs, j)) + "@" + app
+					n = n + 1
+					ref c = dba.getconnection(qn)
+					usada = ""
+					ref ks = list.create_from_fields(sitios)
+					for k=0; k<list.count(ks)
+					{
+						if tolower(field.dstr(sitios, list.str(ks, k), "")) == tolower(qn) { usada = usada + ifstr(usada == "", "", ", ") + list.str(ks, k) }
+					}
+					if qn == adm.cfg("db_admin_qn", "") { usada = ifstr(usada == "", "", usada + ", ") + "alta de empresas" }
+					err = cnx.prueba(qn)
+					est = '<span class="bien">Conecta</span>'
+					if err != "" { est = '<span class="mal" title="' + adm.h(err) + '">No conecta</span>' }
+					h = h + '<tr><td class="fuerte">' + adm.h(qn) + '</td><td>' + adm.h(field.dstr(c, "Host", "") + ":" + field.dstr(c, "Port", "")) + '</td><td>' + adm.h(field.dstr(c, "DefaultSchema", "")) + '</td><td>' + adm.h(ifstr(usada == "", "—", usada)) + '</td><td>' + est + '</td><td class="der"><a href="./?s=conexiones&amp;e=' + adm.h(url_encode(qn)) + '#editar">Editar</a></td></tr>'
+				}
+			}
+		}
+		if n == 0 { h = h + '<tr><td colspan="6">No hay conexiones.</td></tr>' }
+		h = h + '</tbody></table></div></section>'
+
+		e = adm.get("e")
+		if e == "nueva"
+		{
+			ref vacio = record.create()
+			h = h + cnx.formulario("cnx_nueva", "", vacio, "Nueva conexión")
+		}
+		else if e != "" && dba.cnnexists(e)
+		{
+			ref c = dba.getconnection(e)
+			h = h + cnx.formulario("cnx_guardar", e, c, "Editar " + e)
+		}
+		return h
+	}
+
+	acc.conexiones::a
+	{
+		host = adm.post("host")
+		puerto = adm.post("puerto")
+		base = adm.post("base")
+		usuario = adm.post("usuario")
+		pwd = field.dstr(@http_context, "request/post/pwd", "")
+		motor = adm.post("motor")
+		if not(isanyword(motor, "MY_SQL,SQL_SERVER,POSTGRESQL")) { do rise_error(0, "Motor no válido.") }
+		if not(adm.es_numero(puerto)) { do rise_error(0, "El puerto no es válido.") }
+		if host == "" || contains(host, ",") || contains(host, "<") { do rise_error(0, "El servidor no es válido.") }
+		probar = adm.post("probar") == "1"
+
+		if a == "cnx_nueva"
+		{
+			nombre = adm.post("nombre")
+			app = adm.post("app")
+			if not(adm.es_nombre(nombre)) || not(adm.es_nombre(app)) { do rise_error(0, "Nombre o grupo no válidos (letras, números y _).") }
+			qn = nombre + "@" + app
+			ref info = cnx.info(app, nombre, host, puerto, base, usuario, pwd, motor)
+		}
+		else
+		{
+			qn = adm.post("qn")
+			if not(dba.cnnexists(qn)) { do rise_error(0, "No existe la conexión " + qn) }
+			ref ant = dba.getconnection(qn)
+			if pwd == "" { pwd = field.dstr(ant, "Password", "") }
+			ref info = cnx.info("", "", host, puerto, base, usuario, pwd, motor)
+		}
+
+		if probar
+		{
+			// Conexión temporal para probar sin tocar la real
+			qp = "prueba_" + replace(adm.sello(), "-", "") + "@v12admin"
+			do cnx.addapp("v12admin")
+			do dba.createconnection(qp, info, @false, "")
+			err = cnx.prueba(qp)
+			do dba.delconnection(qp)
+			if err == "" { do adm.aviso("ok", "La conexión funciona (" + host + ":" + puerto + "/" + base + "). No se guardó nada.") }
+			else { do adm.aviso("error", "No conecta: " + err) }
+			@adm_destino = "conexiones&e=" + url_encode(ifstr(a == "cnx_nueva", "nueva", qn)) + "#editar"
+			return "conexiones"
+		}
+
+		if a == "cnx_nueva"
+		{
+			if dba.cnnexists(qn) { do rise_error(0, "Ya existe la conexión " + qn) }
+			do cnx.addapp(list.str(split(qn, "@"), 1))
+			do dba.createconnection(qn, info, @false, "")
+			do adm.aviso("ok", "Conexión " + qn + " creada.")
+			do adm.bitacora("conexiones", "nueva " + qn)
+		}
+		else
+		{
+			ref ant = dba.getconnection(qn)
+			do dba.delconnection(qn)
+			codeblock
+			{
+				do dba.createconnection(qn, info, @false, "")
+				exception
+				{
+					e = last_error()
+					do dba.createconnection(qn, ant, @false, "")
+					do rise_error(0, "No se pudo guardar (se dejó la anterior): " + e)
+				}
+			}
+			err = cnx.prueba(qn)
+			do adm.aviso(ifstr(err == "", "ok", "aviso"), "Conexión " + qn + " guardada." + ifstr(err == "", "", "\nAviso: no conecta: " + err))
+			do adm.bitacora("conexiones", "editada " + qn)
+		}
+		return "conexiones"
+	}
+}

@@ -1,0 +1,257 @@
+#include "dkli.dkh"
+#!
+program "v12admin - trabajo en segundo plano"
+{
+	// Ejecuta un trabajo del administrador de V12 Server, desde la raíz de Devkron:
+	//   dkl v12admin/bin/trabajo.dkl id=<id>          pasos de v12admin/datos/trabajos/<id>.json (lo escribe el administrador)
+	//   dkl v12admin/bin/trabajo.dkl tipo=actualizar  actualización de todos los sitios (tarea nocturna)
+	// Bitácora: v12admin/datos/trabajos/<id>.log, que termina con "V12ADMIN_FIN rc=<n>" (0 = sin errores).
+	// Tipos de paso: createdb {qn, base} · deployv12 {packs} · dkl {args, timeout_ms, opcional, verificar_qn} ·
+	//                hosts {host} · actualizar {}
+	// installv12 solo instala lo que deployv12 desplegó para la misma fuente (_deployed/md5(from)) y, si no hay nada,
+	// termina sin error y sin instalar: por eso el alta despliega antes y verifica sys_packs (verificar_qn).
+
+	#include "functions.dkh"
+	#include "serialize.dkh"
+	#include "dbr.dkh"
+	#include "fs.dkh"
+	#include "webcl.dkh"
+
+	do _map_function(-1, "System.OperatingSystem", "IsWindows", "trb._is_windows", "void", "#")
+	do _map_function(-1, "System.IO.Directory", "GetCurrentDirectory", "trb._cwd", "void", "$")
+
+	@trb_dir = "v12admin/datos/trabajos"
+	do dir.ensure(@trb_dir)
+	@trb_win = trb._is_windows()
+	ref @trb_cfg = record.create()
+	codeblock
+	{
+		if file.exists("v12admin/v12server.json") { ref @trb_cfg = from.json(file.rtext("v12admin/v12server.json")) }
+		exception { }
+	}
+	@trb_dkl = field.dstr(@trb_cfg, "dkl", ifstr(@trb_win, path.concat(trb._cwd(), "dkl.exe"), path.concat(trb._cwd(), "dkl")))
+	@trb_from = field.dstr(@trb_cfg, "v12/from", "https://install-v12.induxsoft.net/")
+	@trb_cat = field.dstr(@trb_cfg, "v12/cat", "catalog.json")
+	@trb_app = field.dstr(@trb_cfg, "app_group", "v12")
+	@trb_hosts_file = field.dstr(@trb_cfg, "hosts_file", ifstr(@trb_win, "C:\\Windows\\System32\\drivers\\etc\\hosts", "/etc/hosts"))
+	@trb_log = ""
+
+	trb.ahora::
+	{
+		s = format(ndatetime.now(), "00000000.000000")
+		return substring(s,0,4) + "-" + substring(s,4,2) + "-" + substring(s,6,2) + " " + substring(s,9,2) + ":" + substring(s,11,2) + ":" + substring(s,13,2)
+	}
+
+	trb.empieza::s, prefijo
+	{
+		if length(s) < length(prefijo) { return @false }
+		return lremove(s, length(prefijo)) == prefijo
+	}
+
+	trb.log::s
+	{
+		do file.append(@trb_log, s + "\n")
+		do print(s)
+	}
+
+	// V12LIC_RC=<n> de v12.license (-1 si no está)
+	adm_v12lic_rc::out
+	{
+		p = findstr(out, "V12LIC_RC=")
+		if p < 0 { return -1 }
+		return parse.num(trim(list.str(split(replace(left(out, p + 10), "\r", ""), "\n"), 0)))
+		exception { return -1 }
+	}
+
+	trb.paso_dkl::&p
+	{
+		args = field.dstr(p, "args", "")
+		@exec_timeout = field.dnum(p, "timeout_ms", 1800000)
+		do trb.log("$ dkl " + args)
+		out = exec(@trb_dkl, args + " -hide-log", @true)
+		do trb.log(trim(out))
+		// Errores que imprimen las herramientas de V12 y de Devkron sin código de salida (exec no lo da)
+		lo = tolower(out)
+		if contains(lo, "error:") || contains(lo, "-  error -") || contains(lo, "no se pudo") { return 1 }
+		if adm_v12lic_rc(out) > 0 && adm_v12lic_rc(out) != 2 { return 1 }
+		qv = field.dstr(p, "verificar_qn", "")
+		if qv != ""
+		{
+			ref db = dbr.open(qv)
+			n = dbr.num(db, "select count(*) from sys_packs", @null)
+			do dbr.close(db)
+			do trb.log("Verificación: " + str(n) + " paquetes en sys_packs de " + qv)
+			if n < 1 { return 1 }
+		}
+		return 0
+	}
+
+	// deployv12.dkl de la distribución sin conexión (v12admin/dist) o de la fuente, y deployv12 packs= from= cat=
+	trb.paso_deployv12::&p
+	{
+		if file.exists("v12admin/dist/deployv12.dkl") { do file.copy("v12admin/dist/deployv12.dkl", "deployv12.dkl") }
+		else if not(file.exists("deployv12.dkl"))
+		{
+			do trb.log("Descargando " + @trb_from + "deployv12.dkl")
+			do http.download(@trb_from + "deployv12.dkl", "deployv12.dkl")
+		}
+		new d
+		{
+			@"args": "deployv12 packs=" + field.dstr(p, "packs", "core") + " from=" + @trb_from + " cat=" + @trb_cat
+			@"timeout_ms": 3600000
+		}
+		return trb.paso_dkl(d)
+	}
+
+	trb.paso_createdb::&p
+	{
+		qn = field.dstr(p, "qn", "")
+		base = field.dstr(p, "base", "")
+		adminqn = field.dstr(@trb_cfg, "db_admin_qn", "")
+		if adminqn == "" || not(dba.cnnexists(adminqn)) { do rise_error(0, "No existe la conexión para crear bases (db_admin_qn): " + adminqn) }
+		if dba.cnnexists(qn) { do rise_error(0, "Ya existe la conexión " + qn) }
+		ref info = dba.getconnection(adminqn)
+		info<"DefaultSchema">: base
+		app = list.str(split(qn, "@"), 1)
+		ref apps = dba.apps("*")
+		hay = @false
+		for i=0; i<list.count(apps)
+		{
+			if tolower(trim(list.str(apps, i))) == tolower(app) { hay = @true }
+		}
+		if not(hay) { do dba.addapp(app) }
+		do dba.createdb(qn, info)
+		do trb.log("Base " + base + " y conexión " + qn + " creadas.")
+		return 0
+	}
+
+	trb.paso_hosts::&p
+	{
+		h = tolower(field.dstr(p, "host", ""))
+		t = ""
+		if file.exists(@trb_hosts_file) { t = file.rtext(@trb_hosts_file) }
+		// Búsqueda por texto: " host" seguido de fin de línea, espacio o comentario (no se distinguen líneas comentadas)
+		u = " " + tolower(replace(replace(t, "\r", ""), "\t", " ")) + "\n"
+		if contains(u, " " + h + "\n") || contains(u, " " + h + " ") || contains(u, " " + h + "#")
+		{
+			do trb.log(h + " ya estaba en " + @trb_hosts_file)
+			return 0
+		}
+		nl = ifstr(@trb_win, "\r\n", "\n")
+		if t != ""
+		{
+			if right(t, 1) != "\n" { t = t + nl }
+		}
+		do file.wtext(@trb_hosts_file, t + "127.0.0.1 " + h + "    # V12 Server" + nl)
+		do trb.log("Agregado " + h + " a " + @trb_hosts_file)
+		return 0
+	}
+
+	// Actualización: refresca la licencia y corre updatev12 en cada sitio (no en los alias)
+	trb.paso_actualizar::
+	{
+		rc = 0
+		new pl
+		{
+			@"args": "v12.license -refresh"
+			@"timeout_ms": 120000
+		}
+		do trb.log("[" + trb.ahora() + "] Revalidar la licencia")
+		do trb.paso_dkl(pl)
+		alias = ""
+		if file.exists("_config/v12server.alias") { alias = tolower(file.rtext("_config/v12server.alias")) }
+		ref ds = list.dirs("web")
+		for i=0; i<list.count(ds)
+		{
+			h = file.name(list.str(ds, i))
+			f = path.concat("_config", h + ".json")
+			if file.exists(f) && not(contains(alias, "\n" + tolower(h) + "=")) && not(trb.empieza(alias, tolower(h) + "="))
+			{
+				ref c = from.json(file.rtext(f))
+				qn = field.dstr(c, "qname", "")
+				if qn != ""
+				{
+					new pu
+					{
+						@"args": "updatev12 db=" + qn + " from=" + @trb_from + " cat=" + @trb_cat
+						@"timeout_ms": 3600000
+					}
+					do trb.log("[" + trb.ahora() + "] Actualizar " + h + " (" + qn + ")")
+					if trb.paso_dkl(pu) != 0 { rc = 1 }
+				}
+			}
+		}
+		return rc
+	}
+
+	ref args = commandline("=")
+	id = trim(field.dstr(args, "id", ""))
+	tipo = trim(field.dstr(args, "tipo", ""))
+	ref pasos = list.create()
+	if id != ""
+	{
+		ref spec = from.json(file.rtext(path.concat(@trb_dir, id + ".json")))
+		ref pasos = field.dobj(spec, "pasos", list.create())
+	}
+	else if tipo == "actualizar"
+	{
+		s = replace(replace(replace(trb.ahora(), "-", ""), ":", ""), " ", "-")
+		id = "actualizar-" + s
+		new p0
+		{
+			@"tipo": "actualizar"
+			@"titulo": "Actualización programada"
+		}
+		do list.add(pasos, p0)
+		do file.wtext(path.concat(@trb_dir, id + ".json"), '{"id":"' + id + '","tipo":"actualizar","titulo":"Actualización programada","pasos":[{"tipo":"actualizar"}]}')
+		do file.wtext(path.concat(@trb_dir, id + ".log"), "[" + trb.ahora() + "] Actualización programada\n")
+	}
+	else
+	{
+		do print("Uso: dkl v12admin/bin/trabajo.dkl id=<id> | tipo=actualizar")
+		return
+	}
+	@trb_log = path.concat(@trb_dir, id + ".log")
+
+	rc = 0
+	for i=0; i<list.count(pasos)
+	{
+		ref p = list.obj(pasos, i)
+		t = field.dstr(p, "tipo", "")
+		do trb.log("")
+		do trb.log("[" + trb.ahora() + "] Paso " + str(i + 1) + " de " + str(list.count(pasos)) + ": " + field.dstr(p, "titulo", t))
+		r = 0
+		codeblock
+		{
+			if t == "createdb" { r = trb.paso_createdb(p) }
+			else if t == "dkl" { r = trb.paso_dkl(p) }
+			else if t == "deployv12" { r = trb.paso_deployv12(p) }
+			else if t == "hosts" { r = trb.paso_hosts(p) }
+			else if t == "actualizar" { r = trb.paso_actualizar() }
+			else { do rise_error(0, "Tipo de paso desconocido: " + t) }
+			exception
+			{
+				do trb.log("ERROR: " + last_error())
+				r = 1
+			}
+		}
+		if r != 0
+		{
+			if field.parse.dbool(p, "opcional", 0) { do trb.log("(paso opcional: se continúa)") }
+			else
+			{
+				rc = 1
+				do trb.log("El paso falló; se detiene el trabajo.")
+				break
+			}
+		}
+	}
+	do trb.log("")
+	do trb.log("[" + trb.ahora() + "] V12ADMIN_FIN rc=" + str(rc))
+
+	exception
+	{
+		if @trb_log != "" { do file.append(@trb_log, "ERROR: " + last_error() + "\nV12ADMIN_FIN rc=1\n") }
+		do print("ERROR: " + last_error())
+	}
+}

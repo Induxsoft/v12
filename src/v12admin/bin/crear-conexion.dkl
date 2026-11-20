@@ -1,0 +1,51 @@
+#include "dkli.dkh"
+#!
+program "v12admin - crear conexión"
+{
+	// Lo usa el instalador de Windows: crea (o reemplaza) una conexión del repositorio local de Devkron con los
+	// datos de un archivo JSON temporal, la prueba y BORRA el archivo (la contraseña no pasa por la línea de
+	// comandos ni queda en disco fuera de connections.xml, donde dba la guarda cifrada).
+	//   dkl v12admin/bin/crear-conexion.dkl archivo=<json>      {qn, Engine, Host, Port, UserName, Password, DefaultSchema}
+	// Salida: V12ADMIN_CNX=OK lower_case_table_names=<n> version=<v>   o   V12ADMIN_CNX=ERROR <mensaje>
+	#include "functions.dkh"
+	#include "serialize.dkh"
+	#include "dbr.dkh"
+	ref args = commandline("=")
+	archivo = trim(field.dstr(args, "archivo", ""))
+	if archivo == "" || not(file.exists(archivo)) { do rise_error(0, "No existe el archivo " + archivo) }
+	ref d = from.json(file.rtext(archivo))
+	do file.delete(archivo)
+	qn = field.dstr(d, "qn", "")
+	if not(contains(qn, "@")) { do rise_error(0, "qn no válido") }
+	app = list.str(split(qn, "@"), 1)
+	ref info = record.create()
+	ref ks = list.create_from_fields(d)
+	for i=0; i<list.count(ks)
+	{
+		k = list.str(ks, i)
+		if k != "qn" { info<k>: field.dstr(d, k, "") }
+	}
+	if field.dstr(info, "Engine", "MY_SQL") == "MY_SQL" && not(field.exist(info, "SSLMode")) { info<"SSLMode">: "2" }
+	ref apps = dba.apps("*")
+	hay = @false
+	for i=0; i<list.count(apps)
+	{
+		if tolower(trim(list.str(apps, i))) == tolower(app) { hay = @true }
+	}
+	if not(hay) { do dba.addapp(app) }
+	if dba.cnnexists(qn) { do dba.delconnection(qn) }
+	do dba.createconnection(qn, info, @false, "")
+	ref db = dbr.open(qn)
+	lc = ""
+	ver = ""
+	codeblock
+	{
+		ref t = dbr.table(db, "select @@lower_case_table_names, version()", @null)
+		lc = cell.str(t, 0, 0)
+		ver = cell.str(t, 0, 1)
+		exception { }
+	}
+	do dbr.close(db)
+	do print("V12ADMIN_CNX=OK lower_case_table_names=" + lc + " version=" + ver)
+	exception { do print("V12ADMIN_CNX=ERROR " + last_error()) }
+}

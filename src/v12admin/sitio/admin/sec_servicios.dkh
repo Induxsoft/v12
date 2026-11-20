@@ -1,0 +1,144 @@
+#!
+module "Administrador de V12 Server - Servicios"
+{
+	// Sección Servicios (SPEC §13): estado y reinicio de lo que instaló el instalador. Se definen en
+	// v12server.json > servicios: [{id, nombre, detalle, tipo, name, ...}]. Tipos:
+	//   windows-service, schtask, iis-apppool  -> script admin-servicio.ps1 (Windows)
+	//   systemd                                -> systemctl
+	//   command                                -> estado_cmd (código 0 = en ejecución), reiniciar_cmd, iniciar_cmd,
+	//                                             detener_cmd, ejecutar_cmd (laboratorio sin systemd)
+	// "tarea": true marca una tarea programada definida como command (botón «Ejecutar ahora», estado Habilitada).
+	// "propio": true marca los servicios del propio administrador: se muestran pero no se reinician desde aquí.
+
+	svc.def::id
+	{
+		ref ls = field.dobj(@adm_cfg, "servicios", list.create())
+		for i=0; i<list.count(ls)
+		{
+			ref s = list.obj(ls, i)
+			if field.dstr(s, "id", "") == id { return s }
+		}
+		return @null
+	}
+
+	// Estado: {estado: texto, activo: 1/0, detalle}
+	svc.estado::&s
+	{
+		ref r = record.create()
+		tipo = field.dstr(s, "tipo", "")
+		nombre = field.dstr(s, "name", "")
+		r<"detalle">: ""
+		if isanyword(tipo, "windows-service,schtask,iis-apppool")
+		{
+			ref x = adm.script("servicio", "-Accion estado -Tipo " + tipo + " -Nombre \"" + nombre + "\"")
+			r<"estado">: field.dstr(x, "estado", field.dstr(x, "error", "desconocido"))
+			r<"activo">: field.dnum(x, "activo", 0)
+			r<"detalle">: field.dstr(x, "detalle", "")
+		}
+		else if tipo == "systemd"
+		{
+			ref x = adm.sh("systemctl is-active " + nombre)
+			r<"activo">: ifstr(field.dnum(x, "rc", 1) == 0, "1", "0") == "1"
+			r<"estado">: ifstr(field.dnum(x, "rc", 1) == 0, "En ejecución", "Detenido")
+		}
+		else if tipo == "command"
+		{
+			ref x = adm.sh(field.dstr(s, "estado_cmd", "false"))
+			r<"activo">: ifstr(field.dnum(x, "rc", 1) == 0, "1", "0") == "1"
+			r<"estado">: ifstr(field.dnum(x, "rc", 1) == 0, "En ejecución", "Detenido")
+			r<"detalle">: field.dstr(x, "salida", "")
+		}
+		else
+		{
+			r<"estado">: "Sin definir"
+			r<"activo">: 0
+		}
+		return r
+	}
+
+	// accion: reiniciar | iniciar | detener | ejecutar | habilitar | deshabilitar. Devuelve texto para el aviso.
+	svc.accion::id, accion
+	{
+		ref s = svc.def(id)
+		if isnull(s) { return "Servicio no definido: " + id }
+		if not(isanyword(accion, "reiniciar,iniciar,detener,ejecutar,habilitar,deshabilitar")) { return "Acción no válida" }
+		nombre = field.dstr(s, "name", "")
+		tipo = field.dstr(s, "tipo", "")
+		et = field.dstr(s, "nombre", id)
+		if isanyword(tipo, "windows-service,schtask,iis-apppool")
+		{
+			ref x = adm.script("servicio", "-Accion " + accion + " -Tipo " + tipo + " -Nombre \"" + nombre + "\"")
+			do adm.bitacora("servicios", accion + " " + et + ": " + field.dstr(x, "mensaje", field.dstr(x, "error", "")))
+			return et + ": " + field.dstr(x, "mensaje", field.dstr(x, "error", trim(field.dstr(x, "_salida", ""))))
+		}
+		cmd = ""
+		if tipo == "systemd"
+		{
+			if accion == "reiniciar" { cmd = "systemctl restart " + nombre }
+			else if accion == "iniciar" { cmd = "systemctl start " + nombre }
+			else if accion == "detener" { cmd = "systemctl stop " + nombre }
+		}
+		else if tipo == "command"
+		{
+			cmd = field.dstr(s, accion + "_cmd", "")
+		}
+		if cmd == "" { return et + ": la acción «" + accion + "» no está definida." }
+		ref x = adm.sh(cmd)
+		ok = field.dnum(x, "rc", 1) == 0
+		do adm.bitacora("servicios", accion + " " + et + ": rc=" + str(field.dnum(x, "rc", -1)))
+		return et + ": " + ifstr(ok, accion + " correcto.", "terminó con código " + str(field.dnum(x, "rc", -1)) + ". " + field.dstr(x, "salida", ""))
+	}
+
+	sec.servicios::
+	{
+		h = adm.titulo("Servicios", "Al cambiar la licencia de Devkron (hosts nuevos), el servidor de aplicaciones se reinicia solo.", "")
+		h = h + '<section class="tarjeta"><div class="tabla"><table><thead><tr><th>Servicio</th><th>Detalle</th><th>Estado</th><th><span class="oculto">Acción</span></th></tr></thead><tbody>'
+		ref ls = field.dobj(@adm_cfg, "servicios", list.create())
+		if list.count(ls) == 0 { h = h + '<tr><td colspan="4">No hay servicios definidos en v12admin/v12server.json.</td></tr>' }
+		for i=0; i<list.count(ls)
+		{
+			ref s = list.obj(ls, i)
+			ref e = svc.estado(s)
+			id = field.dstr(s, "id", "")
+			tipo = field.dstr(s, "tipo", "")
+			activo = field.dnum(e, "activo", 0)
+			tarea = tipo == "schtask" || field.parse.dbool(s, "tarea", 0)
+			est = field.dstr(e, "estado", "")
+			if tarea && tipo == "command" { est = ifstr(activo, "Habilitada", "Deshabilitada") }
+			det = field.dstr(s, "detalle", "")
+			if field.dstr(e, "detalle", "") != "" && tipo != "command" { det = det + ifstr(det == "", "", " · ") + field.dstr(e, "detalle", "") }
+			botones = ""
+			if not(field.parse.dbool(s, "propio", 0))
+			{
+				campos = '<input type="hidden" name="id" value="' + adm.h(id) + '">'
+				if tarea
+				{
+					if tipo != "command" || field.dstr(s, "ejecutar_cmd", "") != "" { botones = adm.form("svc_ejecutar", campos + adm.boton("Ejecutar ahora", "sec chico"), 'class="enlinea"') }
+				}
+				else if tipo == "command" && field.dstr(s, ifstr(activo, "reiniciar_cmd", "iniciar_cmd"), "") == "" { botones = "" }
+				else
+				{
+					if activo { botones = adm.form("svc_reiniciar", campos + adm.boton("Reiniciar", "sec chico"), 'class="enlinea" onsubmit="return confirm(\'¿Reiniciar ' + adm.h(field.dstr(s, "nombre", id)) + '?\');"') }
+					else { botones = adm.form("svc_iniciar", campos + adm.boton("Iniciar", "pri chico"), 'class="enlinea"') }
+				}
+			}
+			else { botones = '<span class="tenue">del administrador</span>' }
+			h = h + '<tr><td class="fuerte">' + adm.h(field.dstr(s, "nombre", id)) + '</td><td class="tenue">' + adm.h(det) + '</td><td class="' + ifstr(activo, "bien", "tenue") + '">' + adm.h(est) + '</td><td class="der">' + botones + '</td></tr>'
+		}
+		h = h + '</tbody></table></div></section>'
+		return h
+	}
+
+	acc.servicios::a
+	{
+		id = adm.post("id")
+		ref s = svc.def(id)
+		if isnull(s) { do rise_error(0, "Servicio no definido.") }
+		if field.parse.dbool(s, "propio", 0) { do rise_error(0, "Los servicios del administrador no se reinician desde aquí.") }
+		accion = "reiniciar"
+		if a == "svc_iniciar" { accion = "iniciar" }
+		else if a == "svc_ejecutar" { accion = "ejecutar" }
+		do adm.aviso("ok", svc.accion(id, accion))
+		return "servicios"
+	}
+}

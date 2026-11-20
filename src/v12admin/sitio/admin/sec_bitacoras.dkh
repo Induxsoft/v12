@@ -1,0 +1,124 @@
+#!
+module "Administrador de V12 Server - Bitácoras"
+{
+	// Sección Bitácoras (SPEC §13). Las bitácoras se definen en v12server.json > bitacoras: [{id, nombre, archivo}]
+	// (licencia: v12.license.log de la tarea programada; servidor web: logs de dklwebsvr; instalación: la del
+	// instalador). Se agregan siempre "Administrador" (datos/admin.log) y "Trabajos" (altas y actualizaciones).
+	// "Descargar paquete para soporte" arma un zip con todo eso más v12.license -status; no incluye
+	// connections.xml ni ningún archivo con contraseñas.
+
+	bit.lista::
+	{
+		ref l = list.create()
+		ref cfg = field.dobj(@adm_cfg, "bitacoras", list.create())
+		for i=0; i<list.count(cfg)
+		{
+			do list.add(l, list.obj(cfg, i))
+		}
+		new a
+		{
+			@"id": "admin"
+			@"nombre": "Administrador"
+			@"archivo": path.concat(@adm_datos, "admin.log")
+		}
+		do list.add(l, a)
+		return l
+	}
+
+	bit.ultimos_trabajos::n
+	{
+		ref r = list.create()
+		ref fs = list.sort(list.files(@adm_trabajos, "*.log"))
+		c = list.count(fs)
+		ini = 0
+		if c > n { ini = c - n }
+		i = c
+		while i > ini
+		{
+			i = i - 1
+			do list.add(r, list.str(fs, i))
+		}
+		return r
+	}
+
+	sec.bitacoras::
+	{
+		b = adm.get("b")
+		ref l = bit.lista()
+		if b == "" { b = field.dstr(list.obj(l, 0), "id", "admin") }
+		h = adm.titulo("Bitácoras", "Lo que soporte va a pedirte primero.", "")
+		bt = ""
+		archivo = ""
+		for i=0; i<list.count(l)
+		{
+			ref x = list.obj(l, i)
+			id = field.dstr(x, "id", "")
+			if id == b { archivo = field.dstr(x, "archivo", "") }
+			bt = bt + '<a class="btn ' + ifstr(id == b, "pri", "sec") + '" href="./?s=bitacoras&amp;b=' + adm.h(id) + '">' + adm.h(field.dstr(x, "nombre", id)) + '</a>'
+		}
+		bt = bt + '<a class="btn ' + ifstr(b == "trabajos", "pri", "sec") + '" href="./?s=bitacoras&amp;b=trabajos">Trabajos</a>'
+		h = h + '<div class="botones izq">' + bt + '</div>'
+		if b == "trabajos"
+		{
+			ref ts = bit.ultimos_trabajos(10)
+			txt = ""
+			for i=0; i<list.count(ts)
+			{
+				txt = txt + "===== " + file.name(list.str(ts, i)) + "\n" + adm.cola(adm.leer(list.str(ts, i)), 60) + "\n"
+			}
+			if txt == "" { txt = "(no hay trabajos)" }
+			h = h + '<section class="tarjeta"><pre class="consola">' + adm.h(txt) + '</pre></section>'
+		}
+		else
+		{
+			t = ""
+			if archivo != "" { t = adm.leer(archivo) }
+			if t == "" { t = "(vacía o no existe: " + archivo + ")" }
+			h = h + '<section class="tarjeta"><p class="tenue">' + adm.h(archivo) + ' · últimas 300 líneas</p><pre class="consola">' + adm.h(adm.cola(t, 300)) + '</pre></section>'
+		}
+		h = h + '<div><a class="btn sec" href="./?s=soporte">Descargar paquete para soporte</a></div>'
+		return h
+	}
+
+	bit.paquete_soporte::
+	{
+		d = path.concat(path.temp(), "v12server-soporte-" + adm.sello())
+		do dir.ensure(d)
+		ref l = bit.lista()
+		for i=0; i<list.count(l)
+		{
+			ref x = list.obj(l, i)
+			f = field.dstr(x, "archivo", "")
+			if f != "" && file.exists(f)
+			{
+				do file.wtext(path.concat(d, field.dstr(x, "id", "b" + str(i)) + ".log.txt"), adm.cola(adm.leer(f), 5000))
+			}
+		}
+		ref ts = bit.ultimos_trabajos(10)
+		for i=0; i<list.count(ts)
+		{
+			do file.copy(list.str(ts, i), path.concat(d, "trabajo-" + file.name(list.str(ts, i))))
+		}
+		do file.wtext(path.concat(d, "v12.license-status.txt"), adm.dkl("v12.license -status"))
+		do file.wtext(path.concat(d, "v12server.json"), adm.leer(path.concat(@adm_dir, "v12server.json")))
+		if web.conf_archivo() != "" { do file.wtext(path.concat(d, "dklwebsvr.conn.json"), adm.leer(web.conf_archivo())) }
+		new info
+		{
+			@"equipo": adm._machine()
+			@"fecha": adm.ahora()
+			@"administrador": @adm_version
+			@"devkron": web.devkron_version()
+		}
+		info<"sitios*">: adm.sitios()
+		do file.wtext(path.concat(d, "resumen.json"), to.json(info))
+		z = d + ".zip"
+		do zip.create(d, z)
+		@http_context<"response/headers/content-type">: "application/zip"
+		@http_context<"response/headers/content-disposition">: 'attachment; filename="v12server-soporte-' + adm.sello() + '.zip"'
+		@http_context<"response/output">: "binary"
+		@http_context<"response/binary*">: file.rbytes(z)
+		do dir.delete_deep(d)
+		do file.delete(z)
+		do adm.bitacora("bitacoras", "paquete de soporte descargado")
+	}
+}

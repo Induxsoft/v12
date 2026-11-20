@@ -1,0 +1,16 @@
+#include "dkli.dkh"
+#!
+program "v12admin - probar conexión"
+{
+	// dkl v12admin/bin/probar-conexion.dkl qn=<nombre@grupo>  ->  "V12ADMIN_CNX=OK" o "V12ADMIN_CNX=ERROR <mensaje>"
+	// Se corre en un proceso aparte porque Devkron conserva en memoria lo que leyó de connections.xml: probar
+	// desde la FastCGI del administrador después de editar una conexión usaría los datos anteriores.
+	#include "functions.dkh"
+	#include "dbr.dkh"
+	ref args = commandline("=")
+	qn = trim(field.dstr(args, "qn", ""))
+	ref db = dbr.open(qn)
+	do dbr.close(db)
+	do print("V12ADMIN_CNX=OK")
+	exception { do print("V12ADMIN_CNX=ERROR " + last_error()) }
+}

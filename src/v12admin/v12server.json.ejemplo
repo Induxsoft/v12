@@ -1,0 +1,37 @@
+{
+  "_comentario": "Configuración del administrador de V12 Server: <raíz de Devkron>\\v12admin\\v12server.json. En Windows la escribe scripts\\04-admin.ps1 a partir de instalacion.json (este archivo es un ejemplo de lo que queda). La del laboratorio Linux es lab/v12server.lab.json. No lleva contraseñas.",
+  "plataforma": "windows",
+  "equipo": "SERVIDOR-OFICINA",
+  "version": "1.0.0",
+  "dkl": "C:\\V12Server\\devkron\\dkl.exe",
+  "scripts_dir": "C:\\V12Server\\scripts",
+  "v12server_exe": "C:\\V12Server\\bin\\v12server.exe",
+  "app_group": "v12",
+  "db_admin_qn": "servidor@v12server",
+  "hosts_file": "C:\\Windows\\System32\\drivers\\etc\\hosts",
+  "v12": { "from": "https://install-v12.induxsoft.net/", "cat": "catalog.json", "paquetes": "core-erp" },
+  "admin": { "puerto": "8743", "host": "v12admin.localhost" },
+  "servidor_web": {
+    "modo": "dklwebsvr",
+    "conf": "C:\\V12Server\\devkron\\tools\\dklwebsvr\\dklwebsvr.conn.json",
+    "exe": "C:\\V12Server\\devkron\\tools\\dklwebsvr\\dklwebsvr.exe",
+    "servicio": "web",
+    "certificado": "autofirmado",
+    "iis_sitio": "V12 Server",
+    "iis_apppool": "V12Server"
+  },
+  "servicios": [
+    { "id": "devkron", "nombre": "Servidor de aplicaciones (Devkron FastCGI)", "detalle": "dkl -fastcgi · 127.0.0.1:9090", "tipo": "windows-service", "name": "V12Server.Devkron" },
+    { "id": "web", "nombre": "Servidor web de Devkron (dklwebsvr)", "detalle": "puertos 80 y 443", "tipo": "windows-service", "name": "V12Server.Web" },
+    { "id": "mysql", "nombre": "MySQL 8.4", "detalle": "puerto 3306", "tipo": "windows-service", "name": "V12Server.MySQL" },
+    { "id": "admin", "nombre": "Administrador de V12 Server", "detalle": "https://v12admin.localhost:8743", "tipo": "windows-service", "name": "V12Server.Admin", "propio": true },
+    { "id": "adminweb", "nombre": "Servidor web del administrador", "detalle": "127.0.0.1:8743", "tipo": "windows-service", "name": "V12Server.AdminWeb", "propio": true },
+    { "id": "licencia", "nombre": "Refresco de licencia", "detalle": "tarea programada · cada hora", "tipo": "schtask", "name": "\\Induxsoft\\V12 License Refresh" },
+    { "id": "actualizacion", "nombre": "Actualización de V12", "detalle": "tarea programada · diaria 23:00", "tipo": "schtask", "name": "\\Induxsoft\\V12 Update" }
+  ],
+  "bitacoras": [
+    { "id": "licencia", "nombre": "Licencia", "archivo": "C:\\ProgramData\\Induxsoft\\machine\\v12.license.log" },
+    { "id": "web", "nombre": "Servidor web", "archivo": "C:\\V12Server\\devkron\\tools\\dklwebsvr\\logs\\dklwebsvr.log" },
+    { "id": "instalacion", "nombre": "Instalación", "archivo": "C:\\ProgramData\\Induxsoft\\V12Server\\instalacion.log" }
+  ]
+}

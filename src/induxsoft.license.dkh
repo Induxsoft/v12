@@ -1,0 +1,25 @@
+#!
+module "induxsoft.license"
+{
+	// Licenciamiento de V12 on premise (induxsoft.license.dll). Port de Manager.cs de R5/V10 (DID y ACL)
+	// y de Devkron.License (devkron.license). Las funciones con conexión (v12_login_db, v12_login_previo,
+	// v12_cerrar_propias, v12_sesiones, v12_cerrar_sesion) requieren dbr.dkh incluido antes. Ver README.md.
+	ref @lib_induxsoft_license = _import_library("induxsoft.license.dll")
+
+	do _map_function(@lib_induxsoft_license, "induxsoft.license.Lic", "Did", "lic.did","void","$")
+	do _map_function(@lib_induxsoft_license, "induxsoft.license.Lic", "DidEx", "lic.did_ex","System.Boolean","$")
+	do _map_function(@lib_induxsoft_license, "induxsoft.license.Lic", "Folder", "lic.folder","void","$")
+	do _map_function(@lib_induxsoft_license, "induxsoft.license.Lic", "Macs", "lic.macs","void","*")
+	do _map_function(@lib_induxsoft_license, "induxsoft.license.Lic", "Open", "lic.open","System.String","*")
+	do _map_function(@lib_induxsoft_license, "induxsoft.license.Lic", "Seal", "lic.seal","*System.Object, System.String","$")
+	do _map_function(@lib_induxsoft_license, "induxsoft.license.Lic", "SealAcl", "lic.seal_acl","*System.Object, System.String","$")
+	do _map_function(@lib_induxsoft_license, "induxsoft.license.Lic", "Add", "lic.add","System.String, System.String","void")
+	do _map_function(@lib_induxsoft_license, "induxsoft.license.Lic", "DevkronWrite", "lic.devkron_write","*System.Object, System.String, System.String","$")
+	do _map_function(@lib_induxsoft_license, "induxsoft.license.Lic", "DevkronRead", "lic.devkron_read","System.String, System.String","*")
+	do _map_function(@lib_induxsoft_license, "induxsoft.license.Lic", "V12Login", "lic.v12_login","System.String","*")
+	do _map_function(@lib_induxsoft_license, "induxsoft.license.Lic", "V12LoginDb", "lic.v12_login_db","*System.Object, System.String","*")
+	do _map_function(@lib_induxsoft_license, "induxsoft.license.Lic", "V12LoginPrevio", "lic.v12_login_previo","*System.Object, System.String, System.String","*")
+	do _map_function(@lib_induxsoft_license, "induxsoft.license.Lic", "V12CerrarPropias", "lic.v12_cerrar_propias","*System.Object, System.String","#")
+	do _map_function(@lib_induxsoft_license, "induxsoft.license.Lic", "V12Sesiones", "lic.v12_sesiones","*System.Object","*")
+	do _map_function(@lib_induxsoft_license, "induxsoft.license.Lic", "V12CerrarSesion", "lic.v12_cerrar_sesion","*System.Object, System.String","#")
+}

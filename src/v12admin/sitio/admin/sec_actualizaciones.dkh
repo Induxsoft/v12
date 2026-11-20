@@ -1,0 +1,130 @@
+#!
+module "Administrador de V12 Server - Actualizaciones"
+{
+	// Sección Actualizaciones (SPEC §13): updatev12 de cada sitio (sus paquetes instalados) y la tarea nocturna.
+	// "Actualizar ahora" = trabajo en segundo plano (bin/trabajo.dkl tipo actualizar): v12.license -refresh y
+	// updatev12 db=<qn> from=<fuente> cat=<catálogo> por cada sitio. La tarea nocturna corre lo mismo
+	// ("dkl v12admin/bin/trabajo.dkl tipo=actualizar"); se habilita o deshabilita aquí (servicio "actualizacion").
+
+	upd.manifiesto::
+	{
+		f = path.concat(@adm_datos, "manifest.json")
+		if file.exists(f)
+		{
+			if ndatetime.diff(file.mtime(f), ndatetime.now(), "d") < 1 { return from.json(file.rtext(f)) }
+		}
+		t = http.get(@adm_from + "manifest.json")
+		ref m = from.json(t)
+		do file.wtext(f, t)
+		return m
+		exception
+		{
+			if file.exists(f) { return from.json(file.rtext(f)) }
+			return record.create()
+		}
+	}
+
+	sec.actualizaciones::
+	{
+		h = adm.titulo("Actualizaciones", "Se actualizan los paquetes instalados en cada sitio. Cada actualización también revalida la licencia.", adm.form("upd_ahora", adm.boton("Actualizar ahora", "pri"), 'class="enlinea"'))
+		ultima = "—"
+		resultado = "—"
+		cr = ""
+		ref fs = list.sort(list.files(@adm_trabajos, "actualizar-*.json"))
+		if list.count(fs) > 0
+		{
+			id = file.justname(list.str(fs, list.count(fs) - 1))
+			ref te = adm.trabajo_estado(id)
+			ultima = replace(left(id, 11), "-", " ")
+			if field.dstr(te, "terminado", "0") != "1" { resultado = "En curso" }
+			else if field.dstr(te, "rc", "") == "0"
+			{
+				resultado = "Sin errores"
+				cr = "bien"
+			}
+			else
+			{
+				resultado = "Con errores (ver Bitácoras)"
+				cr = "mal"
+			}
+		}
+		proxima = "—"
+		auto = 0
+		ref sd = svc.def("actualizacion")
+		if not(isnull(sd))
+		{
+			ref e = svc.estado(sd)
+			auto = field.dnum(e, "activo", 0)
+			proxima = ifstr(auto, field.dstr(sd, "detalle", "diaria"), "Deshabilitada")
+		}
+		h = h + '<section class="tarjeta rejilla3">' + adm.kv("Última actualización", ultima, "") + adm.kv("Resultado", resultado, cr) + adm.kv("Automática", proxima, "") + '</section>'
+
+		tr = sit.trabajos("actualizar")
+		if tr != "" { h = h + '<section class="tarjeta"><h2>Avance</h2>' + tr + '</section>' }
+
+		ref m = upd.manifiesto()
+		ref sitios = adm.sitios()
+		ref al = adm.alias()
+		ref ks = list.create_from_fields(sitios)
+		for i=0; i<list.count(ks)
+		{
+			host = list.str(ks, i)
+			if not(field.exist(al, host))
+			{
+				h = h + '<section class="tarjeta"><h2>' + adm.h(host) + '</h2><div class="tabla"><table><thead><tr><th>Paquete</th><th>Instalada</th><th>Disponible</th></tr></thead><tbody>'
+				codeblock
+				{
+					ref db = dbr.open(field.dstr(sitios, host, ""))
+					ref t = table.new()
+					codeblock
+					{
+						ref t = dbr.table(db, "select pack, schema_ver from sys_packs order by pack", @null)
+						exception { }
+					}
+					do dbr.close(db)
+					for r=0; r<table.rows(t)
+					{
+						pk = cell.str(t, r, 0)
+						v = cell.str(t, r, 1)
+						d = field.dstr(m, pk + "/schema_ver", "")
+						dv = '<span class="tenue">' + ifstr(d == "", "no está en la fuente", "al día") + '</span>'
+						if d != "" && d != v { dv = '<span class="nuevo">' + adm.h(d) + '</span>' }
+						h = h + '<tr><td class="fuerte">' + adm.h(pk) + '</td><td>' + adm.h(v) + '</td><td>' + dv + '</td></tr>'
+					}
+					exception { h = h + '<tr><td colspan="3" class="mal">No se pudo leer: ' + adm.h(last_error()) + '</td></tr>' }
+				}
+				h = h + '</tbody></table></div></section>'
+			}
+		}
+		h = h + '<p class="tenue">Versión de esquema de cada paquete (sys_packs) contra el manifiesto de ' + adm.h(@adm_from) + '.</p>'
+		if not(isnull(sd))
+		{
+			f = '<label class="check"><input type="checkbox" name="auto" value="1"' + ifstr(auto, " checked", "") + ' onchange="this.form.submit()">Actualizar automáticamente (' + adm.h(field.dstr(sd, "detalle", "todos los días")) + ')</label>'
+			h = h + adm.form("upd_auto", f, "")
+		}
+		return h
+	}
+
+	acc.actualizaciones::a
+	{
+		if a == "upd_ahora"
+		{
+			ref pasos = list.create()
+			new p0
+			{
+				@"tipo": "actualizar"
+				@"titulo": "Actualizar todos los sitios"
+			}
+			do list.add(pasos, p0)
+			id = adm.trabajo("actualizar", pasos, "Actualización de V12 desde el administrador")
+			do adm.aviso("ok", "Se inició la actualización. El avance se ve abajo.")
+			do adm.bitacora("actualizaciones", "actualizar ahora: trabajo " + id)
+		}
+		else if a == "upd_auto"
+		{
+			on = adm.post("auto") == "1"
+			do adm.aviso("ok", svc.accion("actualizacion", ifstr(on, "habilitar", "deshabilitar")))
+		}
+		return "actualizaciones"
+	}
+}

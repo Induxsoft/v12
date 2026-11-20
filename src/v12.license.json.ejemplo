@@ -1,0 +1,19 @@
+{
+    "url": "https://licencias.api.induxsoft.net/v12op/",
+    "timeout_ms": 30000,
+    "devkron_root": "/usr/devkron",
+    "sesiones": {
+        "vida_horas": 12,
+        "retencion_dias": 30
+    },
+    "devkron": {
+        "renovar_dias": 15,
+        "urgente_dias": 3
+    },
+    "restart": {
+        "mode": "systemd",
+        "name": "devkron-fastcgi",
+        "command": ""
+    },
+    "_comentario": "Va en <carpeta de la máquina>/v12.license.json (Linux /usr/share/induxsoft/machine, Windows C:\\ProgramData\\Induxsoft\\machine) o donde diga V12LIC_CONFIG. restart.mode: systemd | windows-service | iis | command | none. name: unidad de systemd, nombre del servicio de Windows de dklwebsvr o grupo de aplicaciones de IIS. command: si no está vacío, se usa en lugar del comando de mode (laboratorio sin systemd). devkron_root vacío = directorio actual. sesiones (D104): valores predeterminados si la base no trae globalvar sys_session_ttl (horas) / sys_session_retencion (días); 0 o negativo = no se cierran / no se borran. devkron (D104): devkron.license se renueva cuando le quedan menos de renovar_dias (en la primera revisión del día) o de urgente_dias (a cualquier hora)."
+}

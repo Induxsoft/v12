@@ -1,0 +1,1407 @@
+#include "dkli.dkh"
+#!
+program "v12.license"
+{
+	// Licenciamiento de V12 on premise: comando v12.license (SPEC §5.2-§5.4, fase F4).
+	// Va en la raíz de Devkron 2 junto a updatev12.dkl. Se instala también como "v12.license" (sin extensión)
+	// porque dkl solo agrega ".dkl" cuando el nombre no tiene extensión:  ./dkl v12.license -status
+	//
+	//   v12.license {código}                 activa este equipo (llama a /v12op/activar/)
+	//   v12.license {código} -host erp.local igual; si el reparto está vacío, el servidor asigna todo a ese host
+	//   v12.license -refresh                 ciclo de la tarea programada (/v12op/refrescar/, §5.3)
+	//   v12.license -status                  DID, código, vencimiento, reparto por host, último refresco
+	//   v12.license -request [{código}]      código de solicitud para activar sin conexión (§5.4)
+	//   v12.license -import archivo          instala un paquete de licencia descargado del PCC
+	//   v12.license -nube {clave}            instala la licencia «V12 Nube Induxsoft» (ACL clásico, SPEC §7)
+	//
+	// Configuración: <carpeta de la máquina>/v12.license.json (o la ruta de V12LIC_CONFIG, o v12.license.json en el
+	// directorio actual, la raíz de Devkron, si no existe la de la carpeta de la máquina), ver
+	// v12.license.json.ejemplo. Contrato de /v12op/: README.md de esta carpeta.
+	//
+	// Criptografía (DID, abrir el ACL): extensión induxsoft.license (SPEC §5.1): induxsoft.license.dll +
+	// induxsoft.license.dkh en la raíz de Devkron (codigo/induxsoft.license). Solo se usan lic.folder(),
+	// lic.did() y lic.open(). Para probar el flujo sin la DLL ni la contraseña de sellado, instalar-lab.sh con
+	// SUSTITUTO=1 pone en su lugar sustituto/induxsoft.license.dkh, con el mismo nombre de archivo: este include
+	// no cambia.
+	// Linux: la carpeta es /usr/share/induxsoft/machine (de root). v12.license corre como root y crea el DID la
+	// primera vez; la FastCGI solo la lee.
+
+	#include "functions.dkh"
+	#include "serialize.dkh"
+	#include "http.dkh"
+	#include "fs.dkh"
+	#include "dbr.dkh"
+	#include "induxsoft.license.dkh"
+
+	@v12lic_version = "1.1.0"
+
+	do _map_function(-1, "System.Environment", "GetEnvironmentVariable", "v12lic._env_o", "System.String", "*")
+	do _map_function(-1, "System.Environment", "GetEnvironmentVariable", "v12lic._env_s", "System.String", "$")
+	do _map_function(-1, "System.OperatingSystem", "IsWindows", "v12lic._is_windows", "void", "#")
+	do _map_function(-1, "System.Environment", "get_MachineName", "v12lic._machine", "void", "$")
+
+	// ------------------------------------------------------------------------------------- utilidades
+
+	v12lic.env::nombre
+	{
+		ref o = v12lic._env_o(nombre)
+		if isnull(o) { return "" }
+		return v12lic._env_s(nombre)
+	}
+
+	v12lic.leer::archivo
+	{
+		if not(file.exists(archivo)) { return "" }
+		return trim(file.rtext(archivo))
+	}
+
+	// AAAAMMDD.HHMMSS -> AAAA-MM-DDTHH:MM:SS (ndatetime.tostr pierde la hora en 2.0.4)
+	v12lic.iso::n
+	{
+		s = format(n, "00000000.000000")
+		return substring(s,0,4) + "-" + substring(s,4,2) + "-" + substring(s,6,2) + "T" + substring(s,9,2) + ":" + substring(s,11,2) + ":" + substring(s,13,2)
+	}
+
+	v12lic.ahora::
+	{
+		return v12lic.iso(ndatetime.now())
+	}
+
+	// AAAA-MM-DD[THH:MM:SS] -> AAAAMMDD.HHMMSS (0 si viene vacía)
+	v12lic.num::iso
+	{
+		t = trim(iso)
+		if t == "" { return 0 }
+		t = replace(replace(replace(replace(t, "-", ""), ":", ""), "T", "."), " ", ".")
+		return parse.num(t)
+	}
+
+	v12lic.empieza::s, prefijo
+	{
+		if length(s) < length(prefijo) { return @false }
+		return lremove(s, length(prefijo)) == prefijo
+	}
+
+	v12lic.sep::
+	{
+		do print("------------------------------------------------------------")
+	}
+
+	// ------------------------------------------------------------------------------- configuración
+
+	// La carpeta de la máquina y el DID solo se crean al activar (código, -nube, -request, -import y -refresh con
+	// licencia: v12lic.preparar). -status y -help informan sin crear nada.
+	@v12lic_folder = lic.folder()
+	@v12lic_did = ""
+
+	@v12lic_cfg_file = v12lic.env("V12LIC_CONFIG")
+	if @v12lic_cfg_file == "" { @v12lic_cfg_file = path.concat(@v12lic_folder, "v12.license.json") }
+	// Kit de Linux (instalar.sh): la configuración va en la raíz de Devkron (el directorio actual) para no crear la
+	// carpeta de la máquina antes de activar. La de la carpeta de la máquina, si existe, tiene precedencia.
+	if v12lic.env("V12LIC_CONFIG") == "" && not(file.exists(@v12lic_cfg_file)) && file.exists("v12.license.json") { @v12lic_cfg_file = "v12.license.json" }
+	ref @v12lic_cfg = record.create()
+	if file.exists(@v12lic_cfg_file) { ref @v12lic_cfg = from.json(file.rtext(@v12lic_cfg_file)) }
+
+	@v12lic_url = field.dstr(@v12lic_cfg, "url", "https://licencias.api.induxsoft.net/v12op/")
+	if not(v12lic.empieza(right(@v12lic_url, 1), "/")) { @v12lic_url = @v12lic_url + "/" }
+	@v12lic_timeout = field.dnum(@v12lic_cfg, "timeout_ms", 30000)
+	@v12lic_root = field.dstr(@v12lic_cfg, "devkron_root", "")
+	if trim(@v12lic_root) == "" { @v12lic_root = "." }
+	@v12lic_restart_mode = tolower(field.dstr(@v12lic_cfg, "restart/mode", "none"))
+	@v12lic_restart_name = field.dstr(@v12lic_cfg, "restart/name", "")
+	@v12lic_restart_cmd = field.dstr(@v12lic_cfg, "restart/command", "")
+	// D104 (4): tiempo de vida (horas) y retención (días) de las sesiones si la base no trae sys_session_ttl /
+	// sys_session_retencion en globalvar. No se escriben en la base. 0 o negativo = no se cierran / no se borran.
+	@v12lic_ses_vida = field.dnum(@v12lic_cfg, "sesiones/vida_horas", 12)
+	@v12lic_ses_ret = field.dnum(@v12lic_cfg, "sesiones/retencion_dias", 30)
+	// D104 (5): devkron.license dura 35 días; se reemplaza si le quedan menos de renovar_dias (en la primera
+	// revisión del día) o menos de urgente_dias (a cualquier hora), o si cambian sus datos (hosts, puertos…)
+	@v12lic_dk_renovar = field.dnum(@v12lic_cfg, "devkron/renovar_dias", 15)
+	@v12lic_dk_urgente = field.dnum(@v12lic_cfg, "devkron/urgente_dias", 3)
+	@v12lic_dk_aviso = 7
+
+	@v12lic_lic_file = path.concat(@v12lic_folder, "v12.lic")
+	@v12lic_rev_file = path.concat(@v12lic_folder, "v12.revocada")
+	@v12lic_est_file = path.concat(@v12lic_folder, "v12.estado.json")
+	@v12lic_dk_file = path.concat(@v12lic_root, "devkron.license")
+
+	// ¿Ya existe el DID de este equipo? (_device.id de la extensión real; _device.sustituto.id del sustituto de laboratorio)
+	v12lic.hay_did::
+	{
+		if not(dir.exists(@v12lic_folder)) { return @false }
+		return file.exists(path.concat(@v12lic_folder, "_device.id")) || file.exists(path.concat(@v12lic_folder, "_device.sustituto.id"))
+	}
+
+	// Crea (si falta) la carpeta de la máquina y el DID. Solo lo llaman las acciones que activan o instalan.
+	v12lic.preparar::
+	{
+		if @v12lic_did != "" { return @v12lic_did }
+		do dir.ensure(@v12lic_folder)
+		@v12lic_did = lic.did()
+		return @v12lic_did
+	}
+
+	// DID para mostrar sin crear nada: el existente, o vacío si este equipo todavía no tiene. Si el _device.id ya no
+	// corresponde a este equipo (p. ej. cambiaron las MAC), devuelve vacío y deja el error en @v12lic_did_err.
+	@v12lic_did_err = ""
+	v12lic.did_existente::
+	{
+		if @v12lic_did != "" { return @v12lic_did }
+		if not(v12lic.hay_did()) { return "" }
+		@v12lic_did = lic.did()
+		return @v12lic_did
+		exception
+		{
+			@v12lic_did_err = last_error()
+			return ""
+		}
+	}
+
+	// ------------------------------------------------------------------------------------- estado
+
+	v12lic.estado::
+	{
+		if file.exists(@v12lic_est_file) { return from.json(file.rtext(@v12lic_est_file)) }
+		return record.create()
+	}
+
+	v12lic.guarda_estado::&e
+	{
+		do file.wtext(@v12lic_est_file, to.json(e))
+	}
+
+	// Licencia instalada abierta (null si no hay o no se puede abrir)
+	v12lic.lic_actual::
+	{
+		t = v12lic.leer(@v12lic_lic_file)
+		if t == "" { return @null }
+		ref p = lic.open(t)
+		return p
+		exception { return @null }
+	}
+
+	// Código de contratación conocido: estado, o el del v12.lic instalado
+	v12lic.codigo_actual::
+	{
+		ref e = v12lic.estado()
+		c = field.dstr(e, "codigo", "")
+		if c != "" { return c }
+		ref p = v12lic.lic_actual()
+		if isnull(p) { return "" }
+		return field.dstr(p, "codigo", "")
+	}
+
+	// Hosts V12 de esta raíz: carpetas de web/ con _config/<host>.json (los conecta connectv12)
+	v12lic.hosts_locales::
+	{
+		ref l = list.create()
+		w = path.concat(@v12lic_root, "web")
+		if not(dir.exists(w)) { return l }
+		ref ds = list.dirs(w)
+		for i=0; i<list.count(ds)
+		{
+			h = file.name(list.str(ds, i))
+			if file.exists(path.concat(path.concat(@v12lic_root, "_config"), h + ".json")) { do list.add(l, h) }
+		}
+		return l
+	}
+
+
+	// ------------------------------------------------------------------------- puertos (D15)
+	// host:puerto que usa este servidor además de 80/443, para que /v12op/ los agregue a devkron.license (Devkron
+	// compara el host con su puerto). "*:puerto" = todos los hosts (dklwebsvr escucha sin host). Fuentes, en orden:
+	//   1. configuración "puertos": lista o texto separado por comas: "8080", "*:8080" o "erp.local:8080"
+	//   2. dklwebsvr: "listen" de <devkron_root>/tools/dklwebsvr/dklwebsvr.conn.json (o "dklwebsvr_conf")
+	//   3. nginx (Linux): listen y server_name de los server{} en "nginx_dirs" (/etc/nginx/sites-enabled,/etc/nginx/conf.d)
+	//   4. IIS (Windows): bindingInformation de applicationHost.config (o "iis_config")
+	// El servidor solo usa los de hosts que estén en el reparto o sus alias.
+
+	// Último segmento después de ":" ("0.0.0.0:8080" -> "8080", "[::]:8443" -> "8443"); sin ":" la cadena entera
+	v12lic.tras_dos_puntos::d
+	{
+		t = trim(d)
+		p = findstr(t, ":")
+		while p >= 0
+		{
+			t = left(t, p + 1)
+			p = findstr(t, ":")
+		}
+		return t
+	}
+
+	v12lic.es_numero::t
+	{
+		if trim(t) == "" { return @false }
+		return ranydiffchars(t, "0123456789", "x") == t
+	}
+
+	v12lic.agrega_puerto::&l, host, puerto
+	{
+		if puerto <= 0 || puerto > 65535 || puerto == 80 || puerto == 443 { return 0 }
+		h = tolower(trim(host))
+		if h == "" || h == "_" { h = "*" }
+		if findstr(h, "*") >= 0 && h != "*" { return 0 }
+		if v12lic.empieza(h, "~") { return 0 }
+		e = h + ":" + format(puerto, "0")
+		for i=0; i<list.count(l)
+		{
+			if list.str(l, i) == e { return 0 }
+		}
+		do list.add(l, e)
+		return 1
+	}
+
+	// "8080", "*:8080", "erp.local:8080"
+	v12lic.agrega_entrada::&l, entrada
+	{
+		t = tolower(trim(entrada))
+		if t == "" { return 0 }
+		pt = v12lic.tras_dos_puntos(t)
+		if not(v12lic.es_numero(pt)) { return 0 }
+		h = "*"
+		if length(t) > length(pt) { h = lremove(t, length(t) - length(pt) - 1) }
+		do v12lic.agrega_puerto(l, h, parse.num(pt))
+		return 1
+	}
+
+	v12lic.puertos_dklwebsvr::&l
+	{
+		f = field.dstr(@v12lic_cfg, "dklwebsvr_conf", "")
+		if trim(f) == "" { f = path.concat(path.concat(path.concat(@v12lic_root, "tools"), "dklwebsvr"), "dklwebsvr.conn.json") }
+		if not(file.exists(f)) { return 0 }
+		ref c = from.json(file.rtext(f))
+		ref ls = field.dobj(c, "listen", list.create())
+		for i=0; i<list.count(ls)
+		{
+			ref x = list.obj(ls, i)
+			pt = v12lic.tras_dos_puntos(field.dstr(x, "address", ""))
+			if v12lic.es_numero(pt) { do v12lic.agrega_puerto(l, "*", parse.num(pt)) }
+		}
+		return 1
+		exception { return 0 }
+	}
+
+	// Ojo (DKL 2.0.4): en «a == b && i + 1 < n» la suma no se agrupa como en C (da verdadero); por eso las
+	// comparaciones con aritmética van entre paréntesis.
+	// Un archivo de nginx: por cada server{}, sus puertos de listen con cada server_name ("*" si no tiene nombre)
+	v12lic.puertos_nginx_archivo::&l, archivo
+	{
+		ref ln = split(replace(file.rtext(archivo), "\r", ""), "\n")
+		ref tk = list.create()
+		for i=0; i<list.count(ln)
+		{
+			t = list.str(ln, i)
+			c = findstr(t, "#")
+			if c >= 0 { t = lremove(t, c) }
+			t = replace(replace(replace(replace(t, "\t", " "), ";", " ; "), "{", " { "), "}", " } ")
+			ref ps = split(t, " ")
+			for j=0; j<list.count(ps)
+			{
+				if trim(list.str(ps, j)) != "" { do list.add(tk, trim(list.str(ps, j))) }
+			}
+		}
+		prof = 0
+		en = @false
+		prof_srv = 0
+		ref pts = list.create()
+		ref nom = list.create()
+		n = list.count(tk)
+		for i=0; i<n
+		{
+			t = list.str(tk, i)
+			if t == "{" { prof = prof + 1 }
+			else if t == "}"
+			{
+				prof = prof - 1
+				if en && prof == prof_srv
+				{
+					if list.count(nom) == 0 { do list.add(nom, "*") }
+					for a=0; a<list.count(pts)
+					{
+						for b=0; b<list.count(nom)
+						{
+							do v12lic.agrega_puerto(l, list.str(nom, b), list.num(pts, a))
+						}
+					}
+					en = @false
+				}
+			}
+			else if not(en) && tolower(t) == "server" && (i < (n - 1))
+			{
+				if list.str(tk, i + 1) == "{"
+				{
+					en = @true
+					prof_srv = prof
+					do list.clear(pts)
+					do list.clear(nom)
+				}
+			}
+			else if en && (prof == (prof_srv + 1)) && tolower(t) == "listen" && (i < (n - 1))
+			{
+				d = list.str(tk, i + 1)
+				if not(v12lic.empieza(tolower(d), "unix:"))
+				{
+					pt = v12lic.tras_dos_puntos(d)
+					if v12lic.es_numero(pt) { do list.add(pts, parse.num(pt)) }
+				}
+			}
+			else if en && (prof == (prof_srv + 1)) && tolower(t) == "server_name"
+			{
+				k = i + 1
+				while k < n && list.str(tk, k) != ";" && list.str(tk, k) != "{" && list.str(tk, k) != "}"
+				{
+					nm = tolower(list.str(tk, k))
+					if nm != "_" && nm != "" { do list.add(nom, nm) }
+					k = k + 1
+				}
+			}
+		}
+		return 1
+		exception { return 0 }
+	}
+
+	v12lic.puertos_nginx::&l
+	{
+		ref ds = split(field.dstr(@v12lic_cfg, "nginx_dirs", "/etc/nginx/sites-enabled,/etc/nginx/conf.d"), ",")
+		for i=0; i<list.count(ds)
+		{
+			d = trim(list.str(ds, i))
+			if d != "" && dir.exists(d)
+			{
+				ref fs = list.files(d, "*")
+				for j=0; j<list.count(fs)
+				{
+					f = list.str(fs, j)
+					if not(file.exists(f)) { f = path.concat(d, f) }
+					do v12lic.puertos_nginx_archivo(l, f)
+				}
+			}
+		}
+		return 1
+		exception { return 0 }
+	}
+
+	v12lic.puertos_iis::&l
+	{
+		f = field.dstr(@v12lic_cfg, "iis_config", "")
+		if trim(f) == ""
+		{
+			w = v12lic.env("windir")
+			if w == "" { w = "C:\\Windows" }
+			f = path.concat(path.concat(path.concat(path.concat(w, "System32"), "inetsrv"), "config"), "applicationHost.config")
+		}
+		if not(file.exists(f)) { return 0 }
+		t = file.rtext(f)
+		clave = "bindingInformation=\""
+		p = findstr(t, clave)
+		while p >= 0
+		{
+			t = left(t, p + length(clave))
+			q = findstr(t, "\"")
+			if q < 0 { return 1 }
+			v = lremove(t, q)
+			t = left(t, q)
+			ref ps = split(v, ":")
+			c = list.count(ps)
+			if c >= 3
+			{
+				pt = trim(list.str(ps, c - 2))
+				if v12lic.es_numero(pt) { do v12lic.agrega_puerto(l, list.str(ps, c - 1), parse.num(pt)) }
+			}
+			p = findstr(t, clave)
+		}
+		return 1
+		exception { return 0 }
+	}
+
+	v12lic.puertos::
+	{
+		ref l = list.create()
+		if field.typeof(@v12lic_cfg, "puertos") == 3
+		{
+			ref lc = field.dobj(@v12lic_cfg, "puertos", list.create())
+			for i=0; i<list.count(lc)
+			{
+				do v12lic.agrega_entrada(l, list.str(lc, i))
+			}
+		}
+		else
+		{
+			ref lc = split(field.dstr(@v12lic_cfg, "puertos", ""), ",")
+			for i=0; i<list.count(lc)
+			{
+				do v12lic.agrega_entrada(l, list.str(lc, i))
+			}
+		}
+		do v12lic.puertos_dklwebsvr(l)
+		if v12lic._is_windows() { do v12lic.puertos_iis(l) }
+		else { do v12lic.puertos_nginx(l) }
+		return l
+	}
+
+	v12lic.lista_texto::&l
+	{
+		t = ""
+		for i=0; i<list.count(l)
+		{
+			t = t + ifstr(t == "", "", ", ") + list.str(l, i)
+		}
+		return t
+	}
+
+	// ---------------------------------------------------------------------------------- servicio
+
+	// POST JSON a /v12op/<accion>/. Devuelve {_red, _status, respuesta*} o {_red:0, _error}
+	v12lic.llamar::accion, &cuerpo
+	{
+		ref res = record.create()
+		ref h = record.create()
+		h<"__timeout">: @v12lic_timeout
+		h<"User-Agent">: "v12.license/" + @v12lic_version
+		ref r = http.post_json(@v12lic_url + accion + "/", h, cuerpo)
+		res<"_red">: 1
+		res<"_status">: http.status()
+		res<"respuesta*">: r
+		return res
+		exception
+		{
+			ref e = record.create()
+			e<"_red">: 0
+			e<"_status">: http.status()
+			e<"_error">: last_error()
+			return e
+		}
+	}
+
+	v12lic.cuerpo::codigo
+	{
+		ref b = record.create()
+		b<"version">: 1
+		if codigo != "" { b<"codigo">: codigo }
+		b<"did">: @v12lic_did
+		b<"hosts_locales*">: v12lic.hosts_locales()
+		b<"hosts_puertos*">: v12lic.puertos()
+		ref eq = record.create()
+		eq<"nombre">: v12lic._machine()
+		eq<"so">: ifstr(v12lic._is_windows(), "windows", "linux")
+		b<"equipo*">: eq
+		ref cl = record.create()
+		cl<"programa">: "v12.license"
+		cl<"version">: @v12lic_version
+		cl<"reinicio">: @v12lic_restart_mode
+		b<"cliente*">: cl
+		return b
+	}
+
+	// --------------------------------------------------------------------- reinicio de Devkron (§5.3, D10)
+
+	v12lic.reiniciar::
+	{
+		cmd = trim(@v12lic_restart_cmd)
+		if cmd == ""
+		{
+			if @v12lic_restart_mode == "systemd" { cmd = "systemctl restart " + @v12lic_restart_name }
+			else if @v12lic_restart_mode == "windows-service" { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Restart-Service -Name '" + @v12lic_restart_name + "' -Force\"" }
+			else if @v12lic_restart_mode == "iis" { cmd = "%windir%\\system32\\inetsrv\\appcmd.exe recycle apppool /apppool.name:\"" + @v12lic_restart_name + "\"" }
+		}
+		if cmd == "" || @v12lic_restart_mode == "none"
+		{
+			do print("AVISO: cambió devkron.license y no hay forma de reinicio configurada (restart.mode=" + @v12lic_restart_mode + "). Reinicie el servicio de Devkron a mano.")
+			return 0
+		}
+		do print("Reiniciando Devkron (" + @v12lic_restart_mode + "): " + cmd)
+		// La salida del comando va a un archivo temporal y no a la tubería de exec: el proceso de Devkron que
+		// arranca el comando la heredaría y exec no terminaría nunca (visto en el laboratorio con setsid/nohup).
+		tmp = file.temp("txt")
+		if v12lic._is_windows()
+		{
+			out = exec("cmd.exe", "/v:on /c " + cmd + " > \"" + tmp + "\" 2>&1 < NUL & echo V12LIC_RC=!ERRORLEVEL!", @true)
+		}
+		else
+		{
+			out = exec("/bin/sh", "-c \"" + replace(cmd, "\"", "\\\"") + " > '" + tmp + "' 2>&1 < /dev/null; echo V12LIC_RC=$?\"", @true)
+		}
+		salida = ""
+		if file.exists(tmp)
+		{
+			salida = trim(file.rtext(tmp))
+			do file.delete(tmp)
+		}
+		p = findstr(out, "V12LIC_RC=")
+		rc = -1
+		if p >= 0
+		{
+			r = left(out, p + 10)
+			n = findstr(r, "\n")
+			if n >= 0 { r = lremove(r, n) }
+			rc = parse.num(trim(replace(r, "\r", "")))
+		}
+		if salida != "" { do print("   " + salida) }
+		if rc == 0 { do print("Devkron reiniciado.") }
+		else { do print("AVISO: el reinicio terminó con código " + str(rc) + ". Revise el servicio de Devkron.") }
+		return rc
+	}
+
+	v12lic.hoy::
+	{
+		return lremove(v12lic.ahora(), 10)
+	}
+
+	// Días que faltan para una fecha AAAA-MM-DD[THH:MM:SS] (por fecha: hoy = 0; vencida = negativo)
+	v12lic.dias::iso
+	{
+		return ndatetime.diff(v12lic.num(iso), ndatetime.now(), "d")
+	}
+
+	// devkron.license (D104-5). /v12op/ la entrega con expires = min(hoy + 35 días, vencimiento de la licencia), así que
+	// su texto cambia cada día; solo se reemplaza (y se reinicia Devkron) si:
+	//   (a) no existe o cambiaron sus datos distintos de la fecha (hosts, puertos, límites): huella_devkron_datos;
+	//   (b) a la actual le quedan menos de devkron.renovar_dias (15): en la primera revisión exitosa del día
+	//       (devkron_revisado en v12.estado.json; la pyme apaga el servidor de noche), o a cualquier hora si le quedan
+	//       menos de devkron.urgente_dias (3). Al activar y al importar (acciones manuales) no se espera al día
+	//       siguiente, y -import también la reemplaza si la importada vence después que la actual (sin internet es la
+	//       única forma de renovarla).
+	// Si el servidor no manda devkron_vence ni huella_devkron_datos (anterior a D104), se reemplaza si cambió el texto.
+	// Devuelve @true si la escribió.
+	v12lic.devkron::&data, origen
+	{
+		t = trim(field.dstr(data, "devkron_license", ""))
+		if t == "" { return @false }
+		nvence = field.dstr(data, "devkron_vence", "")
+		nhuella = field.dstr(data, "huella_devkron_datos", "")
+		hoy = v12lic.hoy()
+		ref e = v12lic.estado()
+		primera = field.dstr(e, "devkron_revisado", "") != hoy
+		av = field.dstr(e, "devkron_vence", "")
+		motivo = ""
+		if not(file.exists(@v12lic_dk_file)) { motivo = "no existía" }
+		else if v12lic.leer(@v12lic_dk_file) == t { motivo = "" }
+		else if nhuella == "" || nvence == "" { motivo = "cambió (servicio sin vencimiento corto)" }
+		else if field.dstr(e, "devkron_huella", "") != nhuella { motivo = "cambiaron sus datos (hosts, puertos o límites)" }
+		else if av == "" { motivo = "se desconoce el vencimiento de la actual" }
+		else
+		{
+			q = v12lic.dias(av)
+			if q < @v12lic_dk_urgente { motivo = "a la actual le quedan " + str(q) + " días (menos de " + str(@v12lic_dk_urgente) + ")" }
+			else if q < @v12lic_dk_renovar && (primera || origen != "refresco") { motivo = "renovación: a la actual le quedan " + str(q) + " días (menos de " + str(@v12lic_dk_renovar) + ")" }
+			else if v12lic.empieza(origen, "importación") && v12lic.num(nvence) > v12lic.num(av) { motivo = "importada: vence después que la actual" }
+		}
+		e<"devkron_revisado">: hoy
+		if motivo == ""
+		{
+			// mismo archivo: se anotan sus datos (instalaciones anteriores a D104 no los tenían)
+			if nvence != "" && v12lic.leer(@v12lic_dk_file) == t
+			{
+				e<"devkron_vence">: nvence
+				e<"devkron_huella">: nhuella
+			}
+			do v12lic.guarda_estado(e)
+			av = field.dstr(e, "devkron_vence", "")
+			if av == "" { do print("devkron.license: sin cambios (no se reinicia).") }
+			else { do print("devkron.license: sin cambios (vence " + av + ", quedan " + str(v12lic.dias(av)) + " días; no se reinicia).") }
+			return @false
+		}
+		if file.exists(@v12lic_dk_file) { do file.copy(@v12lic_dk_file, @v12lic_dk_file + ".anterior") }
+		do file.wtext(@v12lic_dk_file + ".tmp", t)
+		do file.move(@v12lic_dk_file + ".tmp", @v12lic_dk_file, @true)
+		e<"devkron_vence">: nvence
+		e<"devkron_huella">: nhuella
+		e<"devkron_escrita">: v12lic.ahora()
+		do v12lic.guarda_estado(e)
+		do print("devkron.license: actualizada en " + @v12lic_dk_file + " (" + motivo + ")" + ifstr(nvence != "", ", vence " + nvence, "") + ".")
+		do v12lic.reiniciar()
+		return @true
+	}
+
+	// Cierra una a una las sesiones abiertas de una base (sys_deleted=1). Devuelve las filas o -1 si falló.
+	v12lic.cerrar_base::qname
+	{
+		ref db = dbr.open(qname)
+		n = dbr.execute(db, "update sys_session set sys_deleted=1 where coalesce(sys_deleted,0)=0", record.create())
+		do dbr.close(db)
+		return n
+		exception
+		{
+			do print("   AVISO: no se pudieron cerrar las sesiones de " + qname + ": " + last_error())
+			return -1
+		}
+	}
+
+	// Bases de los hosts V12 de esta raíz. Hosts y conexiones salen de _config/<host>.json (qname, lo escribe connectv12);
+	// una base aparece una sola vez aunque la usen varios hosts (alias). La conexión se abre con el connections.xml del
+	// directorio actual (la raíz de Devkron). Devuelve {orden: [qname…], hosts: {qname: [host…]}}.
+	v12lic.bases_locales::
+	{
+		ref hs = v12lic.hosts_locales()
+		ref porq = record.create()
+		ref orden = list.create()
+		for i=0; i<list.count(hs)
+		{
+			h = list.str(hs, i)
+			ref cfg = from.json(file.rtext(path.concat(path.concat(@v12lic_root, "_config"), h + ".json")))
+			qn = trim(field.dstr(cfg, "qname", ""))
+			if qn != ""
+			{
+				if field.exist(porq, qn) { do list.add(field.dobj(porq, qn, @null), h) }
+				else
+				{
+					ref l = list.create()
+					do list.add(l, h)
+					porq<qn + "*">: l
+					do list.add(orden, qn)
+				}
+			}
+		}
+		ref r = record.create()
+		r<"orden*">: orden
+		r<"hosts*">: porq
+		return r
+	}
+
+	v12lic.hosts_de::&b, qn
+	{
+		ref l = field.dobj(field.dobj(b, "hosts", record.create()), qn, list.create())
+		return v12lic.lista_texto(l)
+	}
+
+	// Revocada: cierra TODAS las sesiones abiertas de cada host V12 de la raíz, para que el IdP rechace también las
+	// que ya existían (SPEC §5.3: el servidor se frena por completo, sin tocar el IdP).
+	v12lic.cerrar_sesiones::
+	{
+		ref b = v12lic.bases_locales()
+		ref orden = field.dobj(b, "orden", list.create())
+		total = 0
+		for i=0; i<list.count(orden)
+		{
+			qn = list.str(orden, i)
+			n = v12lic.cerrar_base(qn)
+			if n >= 0
+			{
+				do print("   " + v12lic.hosts_de(b, qn) + " (" + qn + "): " + str(n) + " sesiones cerradas")
+				total = total + n
+			}
+		}
+		do print("Sesiones abiertas cerradas: " + str(total))
+		return total
+	}
+
+	// ------------------------------------------------------------- límite de usuarios y sesiones (D104)
+
+	// globalvar.sys_session_limit con el mismo SQL de la nube (portal.induxsoft.net _services/lib.upgrade.dk, LimitSession)
+	v12lic.limite_sql::&db, valor
+	{
+		new v
+		{
+			@"varname": "sys_session_limit"
+			@"varvalue": format(valor, "0")
+		}
+		do dbr.execute(db, "
+			INSERT INTO globalvar (sys_guid, sys_dtcreated, sys_timestamp, sys_recver, varname, varvalue)
+			VALUES (REPLACE(UUID(),'-',''), NOW(), NOW(), 0, @varname, @varvalue)
+			ON DUPLICATE KEY UPDATE
+				sys_timestamp = NOW(),
+				sys_recver = IFNULL(sys_recver,0) + 1,
+				varvalue = @varvalue
+		", v)
+	}
+
+	// Valor de una variable de globalvar, o "" si no existe (o está vacía)
+	v12lic.var_base::&db, nombre
+	{
+		new pv { @"n": nombre }
+		v = dbr.str(db, "SELECT IFNULL((SELECT varvalue FROM globalvar WHERE varname=@n),'')", pv)
+		return trim(v)
+	}
+
+	// Variable numérica de globalvar; si no existe o no es un número, el predeterminado
+	v12lic.var_num::&db, nombre, predet
+	{
+		v = v12lic.var_base(db, nombre)
+		if v == "" || ranydiffchars(v, "0123456789.-", "x") != v { return predet }
+		return parse.num(v)
+		exception { return predet }
+	}
+
+	v12lic.escribe_limite::qn, valor, nombres
+	{
+		ref db = dbr.open(qn)
+		do v12lic.limite_sql(db, valor)
+		do dbr.close(db)
+		do print("   " + nombres + " (" + qn + "): sys_session_limit = " + format(valor, "0"))
+		return 1
+		exception
+		{
+			do print("   AVISO: no se pudo escribir sys_session_limit en " + qn + ": " + last_error())
+			return 0
+		}
+	}
+
+	// Revisión exitosa (activar, -refresh, -import): cada base de un host del reparto (o de uno de sus alias) recibe
+	// los usuarios de ese host. Si la usan varios hosts del reparto, la suma. Un host del reparto con 0 usuarios queda
+	// en -1 (en login.dk, 0 es «sin límite»). Las bases de hosts que no están en el reparto no se tocan: se informa
+	// su valor.
+	v12lic.aplicar_limites::&p
+	{
+		ref rep = field.dobj(p, "hosts", record.create())
+		ref ks = list.create_from_fields(rep)
+		ref dueno = record.create()
+		for i=0; i<list.count(ks)
+		{
+			k = list.str(ks, i)
+			dueno<tolower(k)>: k
+		}
+		for i=0; i<list.count(ks)
+		{
+			k = list.str(ks, i)
+			ref la = field.dobj(field.dobj(rep, k, record.create()), "alias", list.create())
+			for j=0; j<list.count(la)
+			{
+				a = tolower(trim(list.str(la, j)))
+				if a != "" && not(field.exist(dueno, a)) { dueno<a>: k }
+			}
+		}
+		ref b = v12lic.bases_locales()
+		ref orden = field.dobj(b, "orden", list.create())
+		if list.count(orden) == 0 { return 0 }
+		do print("Límite de usuarios por base (sys_session_limit, D104):")
+		for i=0; i<list.count(orden)
+		{
+			qn = list.str(orden, i)
+			ref hl = field.dobj(field.dobj(b, "hosts", record.create()), qn, list.create())
+			ref vistos = record.create()
+			suma = 0
+			de = ""
+			for j=0; j<list.count(hl)
+			{
+				h = tolower(list.str(hl, j))
+				if field.exist(dueno, h)
+				{
+					k = field.dstr(dueno, h, "")
+					if not(field.exist(vistos, k))
+					{
+						vistos<k>: 1
+						suma = suma + field.dnum(field.dobj(rep, k, record.create()), "usuarios", 0)
+						de = de + ifstr(de == "", "", ", ") + k
+					}
+				}
+			}
+			if de == ""
+			{
+				actual = "?"
+				ref db = dbr.open(qn)
+				actual = v12lic.var_base(db, "sys_session_limit")
+				do dbr.close(db)
+				do print("   " + v12lic.hosts_de(b, qn) + " (" + qn + "): sin entrada en el reparto; se deja sys_session_limit = " + ifstr(actual == "", "(no existe)", actual))
+			}
+			else
+			{
+				valor = suma
+				if valor <= 0 { valor = -1 }
+				do v12lic.escribe_limite(qn, valor, v12lic.hosts_de(b, qn) + " [reparto: " + de + "]")
+			}
+		}
+		return 1
+		exception
+		{
+			do print("   AVISO: no se pudo aplicar el límite de usuarios: " + last_error())
+			return 0
+		}
+	}
+
+	// Revocada: -1 (base restringida, error 593 en login.dk) en todas las bases locales
+	v12lic.limites_revocada::
+	{
+		ref b = v12lic.bases_locales()
+		ref orden = field.dobj(b, "orden", list.create())
+		for i=0; i<list.count(orden)
+		{
+			qn = list.str(orden, i)
+			do v12lic.escribe_limite(qn, -1, v12lic.hosts_de(b, qn))
+		}
+		return 1
+		exception
+		{
+			do print("   AVISO: " + last_error())
+			return 0
+		}
+	}
+
+	// Nombre de tabla de sys_catalog utilizable en SQL
+	v12lic.tabla_valida::t
+	{
+		if trim(t) == "" || length(t) > 64 { return @false }
+		return ranydiffchars(t, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_", "x") == t
+	}
+
+	v12lic.libera_tabla::&db, tn, &pc
+	{
+		return dbr.execute(db, ftext("
+			UPDATE `#<tn>` t
+				INNER JOIN sys_lockinfo l ON l.sys_pk = t.sys_lock AND l.sys_row = t.sys_pk AND l.sys_table = @cat
+				INNER JOIN sys_session s ON s.sys_pk = l.sys_token
+			SET t.sys_lock = NULL
+			WHERE s.sys_deleted = 1 AND s.sys_timestamp < @c"), pc)
+		exception { return 0 }
+	}
+
+	// Libera las filas que quedaron bloqueadas (sys_lock) por sesiones cerradas que se van a borrar. El bloqueo de una
+	// fila solo se toma si sys_lock está vacío (MySqlAdapter.cs, lockEntity), y freeEntity lo limpia: sin esto quedaría
+	// apuntando a un sys_lockinfo borrado y la fila no se podría volver a bloquear.
+	v12lic.libera_filas::&db, &pc
+	{
+		n = 0
+		ref cats = dbr.list(db, "
+			SELECT DISTINCT c.sys_pk AS cat, c.objectname AS tabla
+			FROM sys_lockinfo l
+				INNER JOIN sys_catalog c ON c.sys_pk = l.sys_table
+				INNER JOIN sys_session s ON s.sys_pk = l.sys_token
+			WHERE s.sys_deleted = 1 AND s.sys_timestamp < @c", pc)
+		for i=0; i<list.count(cats)
+		{
+			ref f = list.obj(cats, i)
+			tn = field.dstr(f, "tabla", "")
+			if v12lic.tabla_valida(tn)
+			{
+				pc<"cat">: field.dnum(f, "cat", 0)
+				n = n + v12lic.libera_tabla(db, tn, pc)
+			}
+		}
+		return n
+	}
+
+	// Una base: cierra las sesiones abiertas que pasaron su tiempo de vida y, si toca (primera revisión del día), borra
+	// las cerradas que pasaron la retención (antes sus sys_lockinfo, la única tabla con llave foránea a sys_session).
+	v12lic.mantener_base::qn, nombres, purga
+	{
+		ref db = dbr.open(qn)
+		vida = v12lic.var_num(db, "sys_session_ttl", @v12lic_ses_vida)
+		msg = "   " + nombres + " (" + qn + "): "
+		if vida > 0
+		{
+			new pv { @"m": round(vida * 60, 0) }
+			n = dbr.execute(db, "UPDATE sys_session SET sys_deleted=1 WHERE COALESCE(sys_deleted,0)=0 AND sys_timestamp < DATE_SUB(NOW(), INTERVAL @m MINUTE)", pv)
+			msg = msg + "vida " + str(vida) + " h, " + str(n) + " cerradas"
+		}
+		else { msg = msg + "vida sin límite" }
+		if purga
+		{
+			ret = v12lic.var_num(db, "sys_session_retencion", @v12lic_ses_ret)
+			if ret > 0
+			{
+				new pd { @"m": round(ret * 1440, 0) }
+				corte = dbr.str(db, "SELECT DATE_FORMAT(DATE_SUB(NOW(), INTERVAL @m MINUTE),'%Y-%m-%d %H:%i:%s')", pd)
+				new pc { @"c": corte }
+				do dbr.begin(db)
+				nf = v12lic.libera_filas(db, pc)
+				nl = dbr.execute(db, "DELETE l FROM sys_lockinfo l INNER JOIN sys_session s ON s.sys_pk = l.sys_token WHERE s.sys_deleted = 1 AND s.sys_timestamp < @c", pc)
+				ns = dbr.execute(db, "DELETE FROM sys_session WHERE sys_deleted = 1 AND sys_timestamp < @c", pc)
+				do dbr.commit(db)
+				msg = msg + "; retención " + str(ret) + " días: " + str(ns) + " borradas (" + str(nl) + " sys_lockinfo, " + str(nf) + " filas desbloqueadas)"
+			}
+			else { msg = msg + "; retención sin límite" }
+		}
+		do dbr.close(db)
+		do print(msg)
+		return 1
+		exception
+		{
+			do print("   AVISO: sesiones de " + qn + ": " + last_error())
+			if dbr.in_transaction(db) { do dbr.rollback(db) }
+			return 0
+		}
+	}
+
+	// Cada -refresh (la tarea horaria), con o sin internet. El borrado por retención, solo en la primera del día
+	// (sesiones_purga en v12.estado.json): la pyme apaga el servidor de noche y no hay una hora fija.
+	v12lic.mantener_sesiones::
+	{
+		ref b = v12lic.bases_locales()
+		ref orden = field.dobj(b, "orden", list.create())
+		if list.count(orden) == 0 { return 0 }
+		hoy = v12lic.hoy()
+		ref e = v12lic.estado()
+		purga = field.dstr(e, "sesiones_purga", "") != hoy
+		do print("Sesiones (D104): cierre por tiempo de vida" + ifstr(purga, " y borrado de las cerradas por retención (primera revisión del día)", ""))
+		for i=0; i<list.count(orden)
+		{
+			qn = list.str(orden, i)
+			do v12lic.mantener_base(qn, v12lic.hosts_de(b, qn), purga)
+		}
+		if purga
+		{
+			ref e2 = v12lic.estado()
+			e2<"sesiones_purga">: hoy
+			do v12lic.guarda_estado(e2)
+		}
+		return 1
+		exception
+		{
+			do print("   AVISO: mantenimiento de sesiones: " + last_error())
+			return 0
+		}
+	}
+
+	// ------------------------------------------------------------------------- instalar un paquete
+
+	// data: {lic, devkron_license, reparto_vacio, ...}. Valida que el v12.lic sea de este equipo y lo guarda.
+	v12lic.instalar::&data, codigo_esperado, origen
+	{
+		t = trim(field.dstr(data, "lic", ""))
+		if t == "" { do rise_error(92, "La respuesta no trae el paquete de licencia (lic).") }
+		ref p = lic.open(t)
+		if field.dstr(p, "did", "") != @v12lic_did { do rise_error(93, "El paquete de licencia es de otro equipo (DID " + field.dstr(p, "did", "") + "; este equipo: " + @v12lic_did + ").") }
+		codigo = field.dstr(p, "codigo", "")
+		if codigo_esperado != "" && toupper(codigo) != toupper(codigo_esperado) { do rise_error(94, "El paquete de licencia es de otro código de contratación (" + codigo + ").") }
+		if v12lic.leer(@v12lic_lic_file) == t
+		{
+			do print("v12.lic: sin cambios.")
+		}
+		else
+		{
+			do file.wtext(@v12lic_lic_file + ".tmp", t)
+			do file.move(@v12lic_lic_file + ".tmp", @v12lic_lic_file, @true)
+			do print("v12.lic: actualizado (" + origen + ").")
+		}
+		if file.exists(@v12lic_rev_file)
+		{
+			do file.delete(@v12lic_rev_file)
+			do print("v12.revocada: eliminada (la licencia vuelve a ser válida).")
+		}
+		do v12lic.devkron(data, origen)
+
+		ref e = v12lic.estado()
+		e<"codigo">: codigo
+		e<"ultimo_refresco">: v12lic.ahora()
+		e<"ultimo_intento">: v12lic.ahora()
+		e<"resultado">: "ok (" + origen + ")"
+		do v12lic.guarda_estado(e)
+
+		do v12lic.aplicar_limites(p)
+
+		if field.parse.dbool(data, "reparto_vacio", 0)
+		{
+			do print("AVISO: la licencia no tiene reparto por host. Configúrelo en el PCC (V12 On Premise) o active con -host <host>.")
+		}
+		vence = field.dstr(p, "vence", "")
+		do print("Licencia " + field.dstr(p, "licencia", "") + " del código " + codigo + ", vence " + ifstr(vence == "", "(sin vencimiento)", vence) + ".")
+		return @true
+	}
+
+	v12lic.revocar::motivo, mensaje
+	{
+		new r
+		{
+			@"fecha": v12lic.ahora()
+			@"motivo": motivo
+			@"mensaje": mensaje
+			@"did": @v12lic_did
+		}
+		do file.wtext(@v12lic_rev_file, to.json(r))
+		do print("LICENCIA REVOCADA (" + motivo + "): " + mensaje)
+		do print("Se escribió " + @v12lic_rev_file + ".")
+		do v12lic.cerrar_sesiones()
+		do print("Límite de usuarios: -1 (base restringida) en todas las bases locales (D104):")
+		do v12lic.limites_revocada()
+		// Sin devkron.license Devkron queda en modo demo (solo *.localhost y 127.0.0.1): los sitios del cliente dejan de
+		// atenderse aunque el login de V12 no revise la licencia. Se aparta (no se borra) y se reinicia. Al reactivar,
+		// v12lic.instalar escribe el devkron.license nuevo que manda /v12op/.
+		if file.exists(@v12lic_dk_file)
+		{
+			do file.move(@v12lic_dk_file, @v12lic_dk_file + ".revocada", @true)
+			do print("devkron.license: apartada como devkron.license.revocada; los sitios de este servidor dejan de atenderse.")
+			ref ed = v12lic.estado()
+			ed<"devkron_vence">: ""
+			ed<"devkron_huella">: ""
+			do v12lic.guarda_estado(ed)
+			do v12lic.reiniciar()
+		}
+		do print("Si se corrigió en el PCC (renovación, reactivación), corra: v12.license -refresh. Si se liberó en el PCC, vuelva a activar con: v12.license {código}")
+	}
+
+	v12lic.intento::resultado
+	{
+		ref e = v12lic.estado()
+		e<"ultimo_intento">: v12lic.ahora()
+		e<"resultado">: resultado
+		do v12lic.guarda_estado(e)
+	}
+
+	// ----------------------------------------------------------------------------------- acciones
+
+	v12lic.activar::codigo, host
+	{
+		do v12lic.preparar()
+		ref b = v12lic.cuerpo(codigo)
+		if host != "" { b<"asignar_host">: host }
+		do print("Activando el código " + codigo + " en este equipo (DID " + @v12lic_did + ") con " + @v12lic_url + "activar/")
+		ref r = v12lic.llamar("activar", b)
+		if not(field.dnum(r, "_red", 0))
+		{
+			do print("No hay conexión con el servicio de licencias: " + field.dstr(r, "_error", ""))
+			do print("Para activar sin conexión: v12.license -request " + codigo + "  (y en el PCC, «Activar sin conexión»).")
+			return 2
+		}
+		ref resp = field.dobj(r, "respuesta", @null)
+		st = field.dnum(r, "_status", 0)
+		if st != 200
+		{
+			do print("El servicio de licencias respondió HTTP " + str(st) + ": " + field.dstr(resp, "message", ""))
+			return 2
+		}
+		if not(field.parse.dbool(resp, "success", 0))
+		{
+			do print("No se activó: " + field.dstr(resp, "message", "(sin mensaje)"))
+			return 4
+		}
+		ref data = field.dobj(resp, "data", @null)
+		do v12lic.instalar(data, codigo, "activación")
+		return 0
+	}
+
+
+	// «V12 Nube Induxsoft» (SPEC §7): /v12op/activar/ con cl (clave de la licencia, letras y dígitos) en lugar de
+	// codigo. Responde {nube:1, acl, acl_archivo}: el ACL clásico se guarda en la carpeta de la máquina como
+	// <acl_archivo> ({productId}.lic, lo que haría lic.add). No escribe v12.lic, no toca devkron.license y no reinicia.
+	v12lic.nube::cl
+	{
+		c = toupper(trim(cl))
+		if c == "" || length(c) > 40 || ranydiffchars(c, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ", "_") != c
+		{
+			do print("Indique la clave de la licencia de V12 Nube Induxsoft (letras y dígitos): v12.license -nube {clave}")
+			return 1
+		}
+		do v12lic.preparar()
+		ref b = v12lic.cuerpo("")
+		b<"cl">: c
+		do print("Instalando la licencia de V12 Nube Induxsoft " + c + " en este equipo (DID " + @v12lic_did + ") con " + @v12lic_url + "activar/")
+		ref r = v12lic.llamar("activar", b)
+		if not(field.dnum(r, "_red", 0))
+		{
+			do print("No hay conexión con el servicio de licencias: " + field.dstr(r, "_error", ""))
+			return 2
+		}
+		ref resp = field.dobj(r, "respuesta", @null)
+		st = field.dnum(r, "_status", 0)
+		if st != 200
+		{
+			do print("El servicio de licencias respondió HTTP " + str(st) + ": " + field.dstr(resp, "message", ""))
+			return 2
+		}
+		if not(field.parse.dbool(resp, "success", 0))
+		{
+			do print("No se instaló: " + field.dstr(resp, "message", "(sin mensaje)"))
+			return 4
+		}
+		ref data = field.dobj(resp, "data", record.create())
+		if not(field.parse.dbool(data, "nube", 0)) { do rise_error(95, "La respuesta no es de una licencia de V12 Nube Induxsoft.") }
+		acl = trim(field.dstr(data, "acl", ""))
+		if acl == "" { do rise_error(92, "La respuesta no trae el ACL (acl).") }
+		archivo = trim(field.dstr(data, "acl_archivo", ""))
+		if archivo == "" || ranydiffchars(archivo, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_.", "/") != archivo || not(v12lic.empieza(tolower(right(archivo, 4)), ".lic")) || tolower(archivo) == "v12.lic" || v12lic.empieza(archivo, ".")
+		{
+			do rise_error(96, "El nombre de archivo del ACL no es válido: " + archivo)
+		}
+		ref p = lic.open(acl)
+		dev = field.dstr(p, "device", field.dstr(p, "did", ""))
+		if dev != @v12lic_did { do rise_error(93, "El ACL es de otro equipo (DID " + dev + "; este equipo: " + @v12lic_did + ").") }
+		destino = path.concat(@v12lic_folder, archivo)
+		if v12lic.leer(destino) == acl { do print(archivo + ": sin cambios.") }
+		else
+		{
+			do file.wtext(destino + ".tmp", acl)
+			do file.move(destino + ".tmp", destino, @true)
+			do print(archivo + ": guardado en " + destino)
+		}
+		vence = field.dstr(data, "vence", field.dstr(p, "expiration", ""))
+		ref e = v12lic.estado()
+		e<"nube_cl">: c
+		e<"nube_archivo">: archivo
+		e<"nube_vence">: vence
+		e<"nube_instalada">: v12lic.ahora()
+		e<"ultimo_intento">: v12lic.ahora()
+		e<"resultado">: "ok (nube)"
+		do v12lic.guarda_estado(e)
+		do print("Licencia de V12 Nube Induxsoft " + c + ", vence " + ifstr(vence == "", "(sin vencimiento)", vence) + ". No se escribe v12.lic ni se reinicia Devkron.")
+		return 0
+	}
+
+	v12lic.refrescar_red::
+	{
+		codigo = v12lic.codigo_actual()
+		if codigo == ""
+		{
+			do print("Este equipo no tiene una licencia de V12 activada. Corra: v12.license {código}")
+			return 1
+		}
+		do v12lic.preparar()
+		ref b = v12lic.cuerpo(codigo)
+		b<"lic_md5">: md5(v12lic.leer(@v12lic_lic_file))
+		b<"devkron_md5">: md5(v12lic.leer(@v12lic_dk_file))
+		do print("[" + v12lic.ahora() + "] Refrescando el código " + codigo + " (DID " + @v12lic_did + ") con " + @v12lic_url + "refrescar/")
+		ref r = v12lic.llamar("refrescar", b)
+		if not(field.dnum(r, "_red", 0))
+		{
+			do print("Sin conexión con el servicio de licencias (" + field.dstr(r, "_error", "") + "): no se cambia nada; se sigue usando el último v12.lic.")
+			do v12lic.intento("sin conexión")
+			return 2
+		}
+		ref resp = field.dobj(r, "respuesta", @null)
+		st = field.dnum(r, "_status", 0)
+		if st != 200
+		{
+			do print("El servicio de licencias respondió HTTP " + str(st) + ": no se cambia nada; se sigue usando el último v12.lic.")
+			do v12lic.intento("HTTP " + str(st))
+			return 2
+		}
+		if field.parse.dbool(resp, "success", 0)
+		{
+			ref data = field.dobj(resp, "data", @null)
+			do v12lic.instalar(data, codigo, "refresco")
+			return 0
+		}
+		ref data = field.dobj(resp, "data", record.create())
+		msg = field.dstr(resp, "message", "")
+		if field.parse.dbool(data, "revocar", 0) || v12lic.empieza(msg, "**")
+		{
+			do v12lic.revocar(field.dstr(data, "motivo", "revocada"), msg)
+			do v12lic.intento("revocada: " + field.dstr(data, "motivo", ""))
+			return 3
+		}
+		do print("El servicio rechazó el refresco sin revocar: " + msg + ". No se cambia nada.")
+		do v12lic.intento("rechazo: " + msg)
+		return 4
+	}
+
+	// ¿Hay una licencia de V12 activa en este equipo? v12.lic que abre, de este DID y sin v12.revocada
+	v12lic.lic_activa::
+	{
+		if file.exists(@v12lic_rev_file) { return @false }
+		ref p = v12lic.lic_actual()
+		if isnull(p) { return @false }
+		return field.dstr(p, "did", "") == v12lic.did_existente() && v12lic.did_existente() != ""
+	}
+
+	// -refresh (tarea horaria): refresco con /v12op/ y, con o sin respuesta, el mantenimiento de sesiones (D104), solo si
+	// queda una licencia de V12 activa. Sin licencia de V12 (p. ej. instalación de un partner extranjero que solo paga
+	// Devkron) no se toca ninguna base; al revocar, revocar() ya cerró las sesiones y escribió -1.
+	v12lic.refrescar::
+	{
+		rc = v12lic.refrescar_red()
+		if v12lic.lic_activa() { do v12lic.mantener_sesiones() }
+		return rc
+	}
+
+	v12lic.status::
+	{
+		do v12lic.sep()
+		do print("V12 On Premise - estado de la licencia (v12.license " + @v12lic_version + ")")
+		do v12lic.sep()
+		did = v12lic.did_existente()
+		if @v12lic_did_err != "" { do print("DID de este equipo:   ** NO VÁLIDO: " + @v12lic_did_err) }
+		else { do print("DID de este equipo:   " + ifstr(did == "", "(todavía no existe: se crea al activar)", did)) }
+		do print("Carpeta de la máquina: " + @v12lic_folder + ifstr(dir.exists(@v12lic_folder), "", " (no existe: se crea al activar)"))
+		do print("Servicio:             " + @v12lic_url)
+		do print("Reinicio de Devkron:  " + @v12lic_restart_mode + ifstr(@v12lic_restart_name != "", " (" + @v12lic_restart_name + ")", ""))
+		ref e = v12lic.estado()
+		ref p = v12lic.lic_actual()
+		if isnull(p)
+		{
+			if file.exists(@v12lic_lic_file) { do print("v12.lic:              EXISTE PERO NO SE PUEDE ABRIR (¿de otro equipo o dañado?)") }
+			else { do print("v12.lic:              no hay licencia instalada. Corra: v12.license {código}") }
+		}
+		else
+		{
+			do print("Código:               " + field.dstr(p, "codigo", ""))
+			do print("Licencia (CL):        " + field.dstr(p, "licencia", ""))
+			do print("NIC:                  " + field.dstr(p, "nic", ""))
+			modalidad = field.dstr(p, "modalidad", "")
+			do print("Modalidad:            " + ifstr(modalidad == "", "(no indicada)", modalidad))
+			do print("Emitido:              " + field.dstr(p, "emitido", ""))
+			vence = field.dstr(p, "vence", "")
+			vn = v12lic.num(vence)
+			do print("Vence:                " + ifstr(vence == "", "(sin vencimiento)", vence) + ifstr(vn > 0 && vn < ndatetime.now(), "  ** VENCIDA **", ""))
+			ah = field.dstr(p, "actualizaciones_hasta", "")
+			if ah != "" { do print("Actualizaciones hasta: " + ah + " (informativo, SPEC §4.8)") }
+			if field.dstr(p, "did", "") != did { do print("** El DID del v12.lic (" + field.dstr(p, "did", "") + ") NO es el de este equipo **") }
+			do print("Reparto por host:")
+			ref hs = field.dobj(p, "hosts", record.create())
+			ref ks = list.create_from_fields(hs)
+			if list.count(ks) == 0 { do print("   (vacío: configúrelo en el PCC)") }
+			for i=0; i<list.count(ks)
+			{
+				h = list.str(ks, i)
+				ref o = field.dobj(hs, h, record.create())
+				al = ""
+				ref la = field.dobj(o, "alias", list.create())
+				for j=0; j<list.count(la)
+				{
+					al = al + ifstr(al == "", "", ", ") + list.str(la, j)
+				}
+				do print("   " + h + ifstr(al != "", " (alias: " + al + ")", "") + ": " + str(field.dnum(o, "usuarios", 0)) + " usuarios")
+				ref pk = field.dobj(o, "paquetes", list.create())
+				pq = ""
+				for j=0; j<list.count(pk)
+				{
+					ref q = list.obj(pk, j)
+					pq = pq + ifstr(pq == "", "", ", ") + field.dstr(q, "id", "") + " x" + str(field.dnum(q, "cantidad", 0))
+				}
+				if pq != "" { do print("      paquetes: " + pq) }
+			}
+		}
+		if file.exists(@v12lic_rev_file)
+		{
+			ref rv = from.json(file.rtext(@v12lic_rev_file))
+			do print("** REVOCADA ** desde " + field.dstr(rv, "fecha", "") + " (" + field.dstr(rv, "motivo", "") + "): " + field.dstr(rv, "mensaje", ""))
+		}
+		do print("Último refresco:      " + field.dstr(e, "ultimo_refresco", "(nunca)"))
+		do print("Último intento:       " + field.dstr(e, "ultimo_intento", "(nunca)") + "  " + field.dstr(e, "resultado", ""))
+		do print("devkron.license:      " + ifstr(file.exists(@v12lic_dk_file), @v12lic_dk_file, "(no existe: Devkron en modo demo)"))
+		dv = field.dstr(e, "devkron_vence", "")
+		if file.exists(@v12lic_dk_file)
+		{
+			if dv == "" { do print("Licencia de Devkron:  vencimiento desconocido (se conocerá en el siguiente refresco)") }
+			else
+			{
+				dq = v12lic.dias(dv)
+				do print("Licencia de Devkron:  vence " + dv + " (quedan " + str(dq) + " días; se renueva sola cuando quedan menos de " + str(@v12lic_dk_renovar) + ")")
+				if dq <= @v12lic_dk_aviso
+				{
+					do print("** AVISO: a la licencia de Devkron le quedan " + str(dq) + " días. Corra v12.license -refresh; sin internet: v12.license -request y -import **")
+				}
+			}
+		}
+		do print("Sesiones:             vida " + ifstr(@v12lic_ses_vida > 0, str(@v12lic_ses_vida) + " h", "sin límite") + ", retención " + ifstr(@v12lic_ses_ret > 0, str(@v12lic_ses_ret) + " días", "sin límite") + " (predeterminados; cada base puede fijar sys_session_ttl / sys_session_retencion)")
+		do print("Último borrado de sesiones cerradas: " + field.dstr(e, "sesiones_purga", "(nunca)"))
+		na = field.dstr(e, "nube_archivo", "")
+		if na != ""
+		{
+			do print("V12 Nube Induxsoft:   " + field.dstr(e, "nube_cl", "") + ", vence " + field.dstr(e, "nube_vence", "") + ", " + ifstr(file.exists(path.concat(@v12lic_folder, na)), path.concat(@v12lic_folder, na), na + " NO EXISTE"))
+		}
+		ref pl = v12lic.puertos()
+		pt = v12lic.lista_texto(pl)
+		do print("Puertos además de 80/443 (D15): " + ifstr(pt == "", "(ninguno)", pt))
+		do v12lic.sep()
+		return 0
+	}
+
+	// Código de solicitud: V12OP-<código>-<DID>-<4 de verificación>
+	v12lic.request::codigo
+	{
+		c = trim(codigo)
+		if c == "" { c = v12lic.codigo_actual() }
+		if c == ""
+		{
+			do print("Indique el código de contratación: v12.license -request {código}")
+			return 1
+		}
+		do v12lic.preparar()
+		s = "V12OP-" + toupper(c) + "-" + @v12lic_did + "-" + lremove(toupper(md5(toupper(c) + "|" + @v12lic_did)), 4)
+		do print("Código de solicitud para activar sin conexión (cópielo en el PCC, «V12 On Premise» > «Activar sin conexión»):")
+		do print("")
+		do print(s)
+		do print("")
+		do print("Después instale el archivo descargado con: v12.license -import <archivo>")
+		return 0
+	}
+
+	v12lic.importar::archivo
+	{
+		if archivo == "" || not(file.exists(archivo))
+		{
+			do print("No existe el archivo: " + archivo)
+			return 1
+		}
+		do v12lic.preparar()
+		t = trim(file.rtext(archivo))
+		ref data = record.create()
+		if v12lic.empieza(t, "{")
+		{
+			ref j = from.json(t)
+			// Acepta la respuesta completa de /v12op/ ({success, data}) o solo su data
+			if field.exist(j, "data") { ref data = field.dobj(j, "data", record.create()) }
+			else { ref data = j }
+		}
+		else
+		{
+			data<"lic">: t
+		}
+		do v12lic.instalar(data, "", "importación de " + file.name(archivo))
+		return 0
+	}
+
+	v12lic.ayuda::
+	{
+		do print("Uso:")
+		do print("  v12.license {código}                  activa este equipo")
+		do print("  v12.license {código} -host erp.local  activa; si el reparto está vacío, asigna todo a ese host")
+		do print("  v12.license -refresh                  verifica y trae los cambios del PCC (tarea programada)")
+		do print("  v12.license -status                   muestra DID, vencimiento y reparto")
+		do print("  v12.license -request [{código}]       código de solicitud para activar sin conexión")
+		do print("  v12.license -import archivo           instala un paquete de licencia descargado del PCC")
+		do print("  v12.license -nube {clave}             instala la licencia de V12 Nube Induxsoft (servidores de Induxsoft)")
+	}
+
+	// ------------------------------------------------------------------------------- argumentos
+
+	ref args = commandline("=")
+	ref tokens = list.create()
+	ref ks = list.create_from_fields(args)
+	for i=1; i<list.count(ks)
+	{
+		k = list.str(ks, i)
+		v = field.dstr(args, k, "")
+		if v != "" { do list.add(tokens, k + "=" + v) }
+		else if not(isanyword(tolower(k), "-hide-log,-hide-critical,-hide-output,-ninja,-encoding:utf8")) { do list.add(tokens, k) }
+	}
+
+	accion = ""
+	codigo = ""
+	host = ""
+	archivo = ""
+	for i=0; i<list.count(tokens)
+	{
+		tk = list.str(tokens, i)
+		tl = tolower(tk)
+		sig = ""
+		if i + 1 < list.count(tokens) { sig = list.str(tokens, i + 1) }
+		if tl == "-refresh" { accion = "refresh" }
+		else if tl == "-status" { accion = "status" }
+		else if tl == "-request" { accion = "request" }
+		else if tl == "-help" || tl == "-h" || tl == "/?" { accion = "ayuda" }
+		else if tl == "-import"
+		{
+			accion = "import"
+			archivo = sig
+			i = i + 1
+		}
+		else if tl == "-nube"
+		{
+			accion = "nube"
+			codigo = sig
+			i = i + 1
+		}
+		else if tl == "-host"
+		{
+			host = tolower(trim(sig))
+			i = i + 1
+		}
+		else if not(v12lic.empieza(tl, "-")) { codigo = trim(tk) }
+	}
+	if accion == "" && codigo != "" { accion = "activar" }
+
+	rc = 0
+	if accion == "activar" { rc = v12lic.activar(codigo, host) }
+	else if accion == "refresh" { rc = v12lic.refrescar() }
+	else if accion == "status" { rc = v12lic.status() }
+	else if accion == "request" { rc = v12lic.request(codigo) }
+	else if accion == "import" { rc = v12lic.importar(archivo) }
+	else if accion == "nube" { rc = v12lic.nube(codigo) }
+	else { do v12lic.ayuda() }
+	do print("V12LIC_RC=" + str(rc))
+
+	exception
+	{
+		do print("ERROR: " + last_error())
+		do print("V12LIC_RC=1")
+	}
+}

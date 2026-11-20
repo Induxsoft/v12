@@ -1,0 +1,529 @@
+#!
+module "Administrador de V12 Server - biblioteca común"
+{
+	// Administrador de V12 Server (SPEC §13, §11-D14). Lo incluye index.dkl.
+	// Corre en su propia instancia de la FastCGI de Devkron (fastcgi-admin.json, controlador v12admin/fastcgi/http.dkl)
+	// con la raíz de Devkron como directorio de trabajo; su sitio es v12admin/sitio, fuera de web/, así que ni
+	// updatev12 ni el servidor web de V12 lo tocan. Solo atiende peticiones de loopback (adm.guard).
+	// Configuración: v12admin/v12server.json (la escribe el instalador; ver v12server.json.ejemplo).
+
+	#include "functions.dkh"
+	#include "serialize.dkh"
+	#include "dbr.dkh"
+	#include "fs.dkh"
+	#include "zip.dkh"
+	#include "webcl.dkh"
+	#include "listx.dkh"
+	#include "induxsoft.license.dkh"
+
+	@adm_version = "1.0.0"
+
+	do _map_function(-1, "System.OperatingSystem", "IsWindows", "adm._is_windows", "void", "#")
+	do _map_function(-1, "System.Environment", "get_MachineName", "adm._machine", "void", "$")
+	do _map_function(-1, "System.IO.Directory", "GetCurrentDirectory", "adm._cwd", "void", "$")
+
+	// ------------------------------------------------------------------------------- utilidades
+
+	@o = ""
+	adm.w::s
+	{
+		@o = @o + s
+	}
+
+	// Escapa texto para HTML (contenido y atributos)
+	adm.h::s
+	{
+		return replace(replace(replace(replace(replace(s, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;"), "'", "&#39;")
+	}
+
+	adm.leer::archivo
+	{
+		if not(file.exists(archivo)) { return "" }
+		return file.rtext(archivo)
+		exception { return "" }
+	}
+
+	adm.empieza::s, prefijo
+	{
+		if length(s) < length(prefijo) { return @false }
+		return lremove(s, length(prefijo)) == prefijo
+	}
+
+	// Primeros n caracteres (sin error si la cadena es más corta)
+	adm.corta::s, n
+	{
+		if length(s) <= n { return s }
+		return lremove(s, n)
+	}
+
+	// AAAAMMDD.HHMMSS -> AAAA-MM-DD HH:MM:SS
+	adm.fecha::n
+	{
+		s = format(n, "00000000.000000")
+		return substring(s,0,4) + "-" + substring(s,4,2) + "-" + substring(s,6,2) + " " + substring(s,9,2) + ":" + substring(s,11,2) + ":" + substring(s,13,2)
+	}
+
+	adm.ahora::
+	{
+		return adm.fecha(ndatetime.now())
+	}
+
+	adm.sello::
+	{
+		return replace(replace(replace(adm.ahora(), "-", ""), ":", ""), " ", "-")
+	}
+
+	// Últimas n líneas de un texto
+	adm.cola::texto, n
+	{
+		ref ls = split(replace(texto, "\r", ""), "\n")
+		c = list.count(ls)
+		ini = 0
+		if c > n { ini = c - n }
+		s = ""
+		for i=ini; i<c
+		{
+			s = s + list.str(ls, i) + "\n"
+		}
+		return s
+	}
+
+	// Validaciones de lo que llega del navegador antes de usarlo en una ruta o en una línea de comando
+	adm.es_host::h
+	{
+		if h == "" || length(h) > 120 { return @false }
+		if not(containschar(lremove(h, 1), "abcdefghijklmnopqrstuvwxyz0123456789")) { return @false }
+		for i=0; i<length(h)
+		{
+			if not(containschar(substring(h, i, 1), "abcdefghijklmnopqrstuvwxyz0123456789.-")) { return @false }
+		}
+		if contains(h, "..") { return @false }
+		return @true
+	}
+
+	adm.es_nombre::n
+	{
+		if n == "" || length(n) > 60 { return @false }
+		for i=0; i<length(n)
+		{
+			if not(containschar(substring(n, i, 1), "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")) { return @false }
+		}
+		return @true
+	}
+
+	adm.es_numero::n
+	{
+		if n == "" || length(n) > 6 { return @false }
+		for i=0; i<length(n)
+		{
+			if not(containschar(substring(n, i, 1), "0123456789")) { return @false }
+		}
+		return @true
+	}
+
+	// ------------------------------------------------------------------------------ configuración
+
+	@adm_dir = "v12admin"
+	@adm_datos = path.concat(@adm_dir, "datos")
+	do dir.ensure(@adm_datos)
+	@adm_trabajos = path.concat(@adm_datos, "trabajos")
+	do dir.ensure(@adm_trabajos)
+	@adm_win = adm._is_windows()
+
+	ref @adm_cfg = record.create()
+	codeblock
+	{
+		if file.exists(path.concat(@adm_dir, "v12server.json")) { ref @adm_cfg = from.json(file.rtext(path.concat(@adm_dir, "v12server.json"))) }
+		exception { ref @adm_cfg = record.create() }
+	}
+
+	adm.cfg::ruta, def
+	{
+		return field.dstr(@adm_cfg, ruta, def)
+	}
+
+	@adm_dkl = adm.cfg("dkl", ifstr(@adm_win, path.concat(adm._cwd(), "dkl.exe"), path.concat(adm._cwd(), "dkl")))
+	@adm_scripts = adm.cfg("scripts_dir", "")
+	@adm_app = adm.cfg("app_group", "v12")
+	@adm_from = adm.cfg("v12/from", "https://install-v12.induxsoft.net/")
+	@adm_cat = adm.cfg("v12/cat", "catalog.json")
+	@adm_hosts_file = adm.cfg("hosts_file", ifstr(@adm_win, "C:\\Windows\\System32\\drivers\\etc\\hosts", "/etc/hosts"))
+	@exec_timeout = 120000
+
+	// ------------------------------------------------------------------------------- seguridad
+
+	// Solo loopback, y solo con un host local (evita que una página de internet use el navegador del servidor
+	// contra el administrador mediante DNS rebinding). Las acciones POST además exigen el token (adm.token_ok).
+	adm.guard::
+	{
+		ip = tolower(trim(field.dstr(@http_context, "request/headers/remote_addr", "")))
+		hh = tolower(trim(field.dstr(@http_context, "request/headers/http_host", "")))
+		hn = hh
+		if adm.empieza(hn, "[")
+		{
+			p = findstr(hn, "]")
+			if p > 0 { hn = substring(hn, 1, p - 1) }
+		}
+		else
+		{
+			hn = list.str(split(hn, ":"), 0)
+		}
+		ok_ip = isanyword(ip, "127.0.0.1,::1,::ffff:127.0.0.1")
+		ok_host = isanyword(hn, "v12admin.localhost,localhost,127.0.0.1,::1")
+		return ok_ip && ok_host
+	}
+
+	adm.token::
+	{
+		f = path.concat(@adm_datos, "admin.token")
+		t = trim(adm.leer(f))
+		if length(t) < 20
+		{
+			t = replace(path._random() + path._random() + path._random(), ".", "")
+			do file.wtext(f, t)
+		}
+		return t
+	}
+
+	adm.token_ok::
+	{
+		return field.dstr(@http_context, "request/post/t", "") == adm.token()
+	}
+
+	adm.post::campo
+	{
+		return trim(field.dstr(@http_context, "request/post/" + campo, ""))
+	}
+
+	adm.get::campo
+	{
+		return trim(field.dstr(@http_context, "request/get/" + campo, ""))
+	}
+
+	// ------------------------------------------------------------------------------- respuestas
+
+	adm.texto::tipo, s
+	{
+		@http_context<"response/headers/content-type">: tipo
+		@http_context<"response/headers/X-Frame-Options">: "DENY"
+		@http_context<"response/output">: "text"
+		@http_context<"response/text">: s
+	}
+
+	// Detrás de dklwebsvr 1.1.0 un Location sin Status llega como 200 (Devkron manda "HTTP/1.1 200 OK" y
+	// dklwebsvr le da prioridad); por eso se fija el estado explícito.
+	adm.redirigir::url
+	{
+		@http_context<"response/http_status">: 303
+		@http_context<"response/headers/location">: url
+		do adm.texto("text/plain;charset=utf-8", "")
+	}
+
+	// Mensaje para la siguiente página (PRG): se guarda en un archivo de datos y se muestra una vez
+	adm.aviso::tipo, texto
+	{
+		new a
+		{
+			@"tipo": tipo
+			@"texto": texto
+		}
+		do file.wtext(path.concat(@adm_datos, "aviso.json"), to.json(a))
+	}
+
+	adm.aviso_html::
+	{
+		f = path.concat(@adm_datos, "aviso.json")
+		if not(file.exists(f)) { return "" }
+		ref a = from.json(file.rtext(f))
+		do file.delete(f)
+		tipo = field.dstr(a, "tipo", "ok")
+		return '<div class="aviso aviso-' + adm.h(tipo) + '" role="status"><pre>' + adm.h(field.dstr(a, "texto", "")) + '</pre></div>'
+		exception { return "" }
+	}
+
+	@adm_nav = "licencia:Licencia,sitios:Sitios V12,conexiones:Conexiones,servidor:Servidor web,servicios:Servicios,actualizaciones:Actualizaciones,bitacoras:Bitácoras"
+
+	adm.pagina::seccion, titulo, cuerpo
+	{
+		nav = ""
+		ref items = split(@adm_nav, ",")
+		for i=0; i<list.count(items)
+		{
+			ref kv = split(list.str(items, i), ":")
+			k = list.str(kv, 0)
+			t = list.str(kv, 1)
+			if k == seccion { nav = nav + '<a href="./?s=' + k + '" aria-current="page" class="nav-activo">' + t + '</a>' }
+			else { nav = nav + '<a href="./?s=' + k + '">' + t + '</a>' }
+		}
+		equipo = adm.cfg("equipo", adm._machine())
+		html = '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+		html = html + '<title>Administrador V12 Server · ' + adm.h(titulo) + '</title><link rel="stylesheet" href="estilo.css"></head><body>'
+		html = html + '<header class="barra"><div class="marca"><span class="logo">V12</span><span class="nombre">Administrador de V12 Server</span><span class="equipo">' + adm.h(equipo) + '</span></div>'
+		html = html + '<div class="local">Solo en este servidor (localhost)</div></header>'
+		html = html + '<div class="contenedor"><nav aria-label="Secciones" class="nav">' + nav + '</nav><main class="principal">'
+		html = html + adm.aviso_html() + cuerpo + '</main></div><script src="admin.js"></script></body></html>'
+		@http_context<"response/headers/Cache-Control">: "no-store"
+		do adm.texto("text/html;charset=utf-8", html)
+	}
+
+	// Formulario POST con el token. acciones: botones; campos: html de campos
+	adm.form::accion, contenido, extra
+	{
+		return '<form method="post" action="./" ' + extra + '><input type="hidden" name="t" value="' + adm.token() + '"><input type="hidden" name="a" value="' + adm.h(accion) + '">' + contenido + '</form>'
+	}
+
+	adm.boton::texto, clase
+	{
+		return '<button type="submit" class="btn ' + clase + '">' + adm.h(texto) + '</button>'
+	}
+
+	adm.campo::etiqueta, nombre, valor, tipo, ayuda
+	{
+		a = ""
+		if ayuda != "" { a = '<span class="ayuda">' + adm.h(ayuda) + '</span>' }
+		return '<label class="campo">' + adm.h(etiqueta) + '<input type="' + tipo + '" name="' + nombre + '" value="' + adm.h(valor) + '" autocomplete="off">' + a + '</label>'
+	}
+
+	adm.kv::k, v, clase
+	{
+		return '<div class="kv"><span class="k">' + adm.h(k) + '</span><span class="v ' + clase + '">' + adm.h(v) + '</span></div>'
+	}
+
+	adm.titulo::t, sub, botones
+	{
+		return '<div class="titulo"><div><h1>' + adm.h(t) + '</h1><p>' + adm.h(sub) + '</p></div><div class="botones">' + botones + '</div></div>'
+	}
+
+	// ------------------------------------------------------------------------------- procesos
+
+	// Ejecuta un programa y devuelve su salida (espera hasta @exec_timeout). exec no lanza error por código de
+	// salida distinto de 0 (v12.license/PRUEBAS.md §3): quien llama interpreta la salida.
+	adm.exec::exe, args
+	{
+		return exec(exe, args, @true)
+		exception { return "ERROR: " + last_error() }
+	}
+
+	// dkl <args> en la raíz de Devkron
+	adm.dkl::args
+	{
+		return adm.exec(@adm_dkl, args + " -hide-log")
+	}
+
+	// Comando de shell con código de salida (Linux; en Windows solo para comandos sin comillas)
+	adm.sh::cmd
+	{
+		ref r = record.create()
+		tmp = file.temp("txt")
+		if @adm_win
+		{
+			out = adm.exec("cmd.exe", "/v:on /c " + cmd + " > \"" + tmp + "\" 2>&1 < NUL & echo ADM_RC=!ERRORLEVEL!")
+		}
+		else
+		{
+			out = adm.exec("/bin/sh", "-c \"( " + replace(cmd, "\"", "\\\"") + " ) > '" + tmp + "' 2>&1 < /dev/null; echo ADM_RC=$?\"")
+		}
+		salida = ""
+		if file.exists(tmp)
+		{
+			salida = trim(file.rtext(tmp))
+			do file.delete(tmp)
+		}
+		rc = -1
+		p = findstr(out, "ADM_RC=")
+		if p >= 0 { rc = parse.num(trim(replace(replace(left(out, p + 7), "\r", ""), "\n", ""))) }
+		r<"rc">: rc
+		r<"salida">: salida
+		return r
+	}
+
+	// Script de la plataforma (scripts_dir/admin-<nombre>.ps1 en Windows, .sh en Linux). Imprime JSON en la
+	// última línea; se devuelve como registro (con _salida = todo lo demás). args: ya validados por quien llama.
+	adm.script::nombre, args
+	{
+		if @adm_win
+		{
+			out = adm.exec("powershell.exe", "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"" + path.concat(@adm_scripts, "admin-" + nombre + ".ps1") + "\" " + args)
+		}
+		else
+		{
+			out = adm.exec("/bin/sh", path.concat(@adm_scripts, "admin-" + nombre + ".sh") + " " + args)
+		}
+		ref ls = split(trim(replace(out, "\r", "")), "\n")
+		ultima = trim(list.str(ls, list.count(ls) - 1))
+		ref r = record.create()
+		if adm.empieza(ultima, "{")
+		{
+			codeblock
+			{
+				ref r = from.json(ultima)
+				exception { ref r = record.create() }
+			}
+		}
+		else
+		{
+			r<"ok">: 0
+			r<"error">: "El script no devolvió JSON"
+		}
+		r<"_salida">: out
+		return r
+	}
+
+	// ------------------------------------------------------------------------------- trabajos
+
+	// Trabajo en segundo plano: escribe la especificación en datos/trabajos/<id>.json y lanza
+	// "dkl v12admin/bin/trabajo.dkl id=<id>" desligado del proceso de la FastCGI. La bitácora queda en <id>.log
+	// y termina con la línea "V12ADMIN_FIN rc=<n>".
+	adm.trabajo::tipo, &pasos, titulo
+	{
+		id = tipo + "-" + adm.sello()
+		new spec
+		{
+			@"id": id
+			@"tipo": tipo
+			@"titulo": titulo
+			@"creado": adm.ahora()
+		}
+		spec<"pasos*">: pasos
+		do file.wtext(path.concat(@adm_trabajos, id + ".json"), to.json(spec))
+		do file.wtext(path.concat(@adm_trabajos, id + ".log"), "[" + adm.ahora() + "] " + titulo + "\n")
+		if @adm_win
+		{
+			// Start-Process no hereda las tuberías: exec regresa en cuanto se lanza
+			do adm.exec("powershell.exe", "-NoProfile -NonInteractive -Command \"Start-Process -FilePath '" + @adm_dkl + "' -ArgumentList 'v12admin\\bin\\trabajo.dkl','id=" + id + "','-hide-log' -WorkingDirectory '" + adm._cwd() + "' -WindowStyle Hidden\"")
+		}
+		else
+		{
+			do adm.exec("/bin/sh", "-c \"setsid '" + @adm_dkl + "' v12admin/bin/trabajo.dkl id=" + id + " -hide-log > /dev/null 2>&1 < /dev/null &\"")
+		}
+		return id
+	}
+
+	adm.trabajo_estado::id
+	{
+		ref r = record.create()
+		log = adm.leer(path.concat(@adm_trabajos, id + ".log"))
+		r<"log">: log
+		p = findstr(log, "V12ADMIN_FIN rc=")
+		r<"terminado">: ifstr(p >= 0, "1", "0")
+		r<"rc">: ifstr(p >= 0, trim(list.str(split(left(log, p + 16), "\n"), 0)), "")
+		return r
+	}
+
+	// ------------------------------------------------------------------------------- V12 y licencia
+
+	adm.lic_folder::
+	{
+		return lic.folder()
+		exception { return "" }
+	}
+
+	// Licencia instalada (registro de lic.open) o null
+	adm.lic::
+	{
+		f = path.concat(adm.lic_folder(), "v12.lic")
+		if not(file.exists(f)) { return @null }
+		ref p = lic.open(trim(file.rtext(f)))
+		return p
+		exception { return @null }
+	}
+
+	// Sitios V12 de esta raíz: carpetas de web/ con _config/<host>.json (connectv12). {host: qname}
+	adm.sitios::
+	{
+		ref r = record.create()
+		if not(dir.exists("web")) { return r }
+		ref ds = list.dirs("web")
+		for i=0; i<list.count(ds)
+		{
+			h = file.name(list.str(ds, i))
+			f = path.concat("_config", h + ".json")
+			if file.exists(f)
+			{
+				codeblock
+				{
+					ref c = from.json(file.rtext(f))
+					r<h>: field.dstr(c, "qname", "")
+					exception { r<h>: "" }
+				}
+			}
+		}
+		return r
+	}
+
+	// Alias definidos por el administrador: _config/v12server.alias (líneas "alias=host"; lo lee fastcgi/alias.dkl)
+	adm.alias_archivo::
+	{
+		return path.concat("_config", "v12server.alias")
+	}
+
+	adm.alias::
+	{
+		ref r = record.create()
+		ref ls = split(replace(adm.leer(adm.alias_archivo()), "\r", ""), "\n")
+		for i=0; i<list.count(ls)
+		{
+			l = trim(list.str(ls, i))
+			p = findstr(l, "=")
+			if p > 0 && not(adm.empieza(l, "#")) { r<trim(lremove(l, p))>: trim(left(l, p + 1)) }
+		}
+		return r
+	}
+
+	adm.alias_de::host
+	{
+		s = ""
+		ref al = adm.alias()
+		ref ks = list.create_from_fields(al)
+		for i=0; i<list.count(ks)
+		{
+			if field.dstr(al, list.str(ks, i), "") == host { s = s + ifstr(s == "", "", ", ") + list.str(ks, i) }
+		}
+		return s
+	}
+
+	adm.hosts_tiene::h
+	{
+		ref ls = split(replace(adm.leer(@adm_hosts_file), "\r", ""), "\n")
+		for i=0; i<list.count(ls)
+		{
+			l = trim(replace(list.str(ls, i), "\t", " "))
+			if not(adm.empieza(l, "#"))
+			{
+				ref ps = split(l, " ")
+				for j=1; j<list.count(ps)
+				{
+					if tolower(trim(list.str(ps, j))) == h { return @true }
+				}
+			}
+		}
+		return @false
+	}
+
+	// Agrega "127.0.0.1 host" al archivo hosts si falta
+	adm.hosts_agregar::h
+	{
+		if adm.hosts_tiene(h) { return @false }
+		t = adm.leer(@adm_hosts_file)
+		nl = ifstr(@adm_win, "\r\n", "\n")
+		if t != ""
+		{
+			if right(t, 1) != "\n" { t = t + nl }
+		}
+		do file.wtext(@adm_hosts_file, t + "127.0.0.1 " + h + "    # V12 Server" + nl)
+		return @true
+	}
+
+	// Bitácora del administrador: datos/admin.log ("fecha  tema  texto")
+	adm.bitacora::tema, texto
+	{
+		do file.append(path.concat(@adm_datos, "admin.log"), adm.ahora() + "  " + tema + "  " + replace(replace(texto, "\r", " "), "\n", " ") + ifstr(@adm_win, "\r\n", "\n"))
+		exception { }
+	}
+
+	adm.abrir_db::qn
+	{
+		ref db = dbr.open(qn)
+		return db
+	}
+}

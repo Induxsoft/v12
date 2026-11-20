@@ -1,0 +1,15 @@
+/*
+	Administrador de V12 Server: alias.dkl del controlador propio (v12admin/fastcgi/).
+	El instalador copia aquí los .dkl de fastcgi/ de la distribución de Devkron y reemplaza este archivo.
+	Cualquier host que llegue a esta instancia (solo escucha en 127.0.0.1) se sirve desde v12admin/sitio,
+	fuera de web/: el servidor web de V12 no puede servirlo y updatev12 no lo toca. Así tampoco importa que el
+	navegador mande el host con el puerto (v12admin.localhost:8743), que en web/<host> no existiría.
+	La comprobación de loopback y de host la hace el propio sitio (admin.dkh, adm.guard).
+	Excepción: v12dist.localhost sirve v12admin/dist, la distribución de V12 sin conexión (catalog.json, manifest.json
+	y zips) para deployv12/installv12/updatev12 con from=http://v12dist.localhost:8742/ (escucha HTTP solo en
+	127.0.0.1). Aquí no se crean objetos (ver servidor-v12/alias.dkl).
+*/
+#!
+if findstr(tolower(host), "v12dist.") == 0 { host = "dist" }
+else { host = "sitio" }
+base_path = "v12admin"

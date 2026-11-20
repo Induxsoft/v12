@@ -1,0 +1,222 @@
+#!
+module "Administrador de V12 Server - Sitios V12"
+{
+	// Sección Sitios V12 (SPEC §13): empresas (un host por empresa, cada una con su base) y alias del despliegue.
+	// Alta: trabajo en segundo plano (bin/trabajo.dkl) con dba.createdb + deployv12 + createsite v12 + connectv12 + installv12
+	// + archivo hosts + v12.license -refresh (para que el portal vea el host nuevo y se pueda repartir).
+	// Alias: _config/v12server.alias (lo aplica fastcgi/alias.dkl del servidor de V12) + connectv12 del alias.
+
+	sit.es_paquetes::s
+	{
+		if s == "" || length(s) > 300 { return @false }
+		for i=0; i<length(s)
+		{
+			if not(containschar(substring(s, i, 1), "abcdefghijklmnopqrstuvwxyz0123456789.,-_@")) { return @false }
+		}
+		return @true
+	}
+
+	sit.base_de::qn
+	{
+		if qn == "" { return "" }
+		ref c = dba.getconnection(qn)
+		return field.dstr(c, "DefaultSchema", list.str(split(qn, "@"), 0))
+		exception { return list.str(split(qn, "@"), 0) }
+	}
+
+	sit.version::qn
+	{
+		if qn == "" { return "—" }
+		ref db = dbr.open(qn)
+		r = ""
+		codeblock
+		{
+			n = dbr.num(db, "select count(*) from sys_packs", @null)
+			ref t = dbr.table(db, "select schema_ver from sys_packs where pack='webshell'", @null)
+			v = ""
+			if table.rows(t) > 0 { v = cell.str(t, 0, 0) }
+			r = str(n) + " paquetes" + ifstr(v != "", " · webshell " + v, "")
+			exception { r = "sin V12 instalado" }
+		}
+		do dbr.close(db)
+		return r
+		exception { return "sin conexión" }
+	}
+
+	// Trabajos recientes de un tipo (los últimos 3), para seguirlos en la página
+	sit.trabajos::tipo
+	{
+		h = ""
+		ref fs = list.sort(list.files(@adm_trabajos, tipo + "-*.json"))
+		c = list.count(fs)
+		ini = 0
+		if c > 3 { ini = c - 3 }
+		i = c
+		while i > ini
+		{
+			i = i - 1
+			id = file.justname(list.str(fs, i))
+			ref te = adm.trabajo_estado(id)
+			fin = field.dstr(te, "terminado", "0") == "1"
+			estado = ifstr(fin, ifstr(field.dstr(te, "rc", "") == "0", "Terminado", "Terminado con errores (rc=" + field.dstr(te, "rc", "") + ")"), "En curso…")
+			h = h + '<details class="trabajo"' + ifstr(i == c - 1, " open", "") + '><summary>' + adm.h(id) + ' · <span class="' + ifstr(fin, ifstr(field.dstr(te, "rc", "") == "0", "bien", "mal"), "aviso-txt") + '">' + adm.h(estado) + '</span></summary>'
+			h = h + '<pre class="consola" data-trabajo="' + adm.h(id) + '" data-fin="' + ifstr(fin, "1", "0") + '">' + adm.h(adm.cola(field.dstr(te, "log", ""), 200)) + '</pre></details>'
+		}
+		return h
+	}
+
+	sec.sitios::
+	{
+		ref sitios = adm.sitios()
+		ref al = adm.alias()
+		ref p = adm.lic()
+		ref hs = record.create()
+		if not(isnull(p)) { ref hs = field.dobj(p, "hosts", record.create()) }
+
+		h = adm.titulo("Sitios V12", "Cada empresa es un host con su propia base. Para usarlo, el host debe tener usuarios en el reparto del portal.", '<a class="btn pri" href="#nueva">Nueva empresa</a>')
+		h = h + '<section class="tarjeta"><div class="tabla"><table><thead><tr><th>Host</th><th>Alias</th><th>Base</th><th>V12 instalado</th><th>En la licencia</th></tr></thead><tbody>'
+		ref ks = list.sort(list.create_from_fields(sitios))
+		n = 0
+		opts = ""
+		for i=0; i<list.count(ks)
+		{
+			host = list.str(ks, i)
+			if not(field.exist(al, host))
+			{
+				n = n + 1
+				qn = field.dstr(sitios, host, "")
+				enlic = '<span class="aviso-txt">Sin usuarios</span>'
+				if field.exist(hs, host) { enlic = '<span class="bien">' + str(field.dnum(hs, host + "/usuarios", 0)) + ' usuarios</span>' }
+				aliases = adm.alias_de(host)
+				h = h + '<tr><td class="fuerte"><a href="http://' + adm.h(host) + '/" target="_blank" rel="noopener">' + adm.h(host) + '</a></td><td class="tenue">' + adm.h(ifstr(aliases == "", "—", aliases)) + '</td><td>' + adm.h(sit.base_de(qn)) + '</td><td>' + adm.h(sit.version(qn)) + '</td><td>' + enlic + '</td></tr>'
+				opts = opts + '<option value="' + adm.h(host) + '">' + adm.h(host) + '</option>'
+			}
+		}
+		if n == 0 { h = h + '<tr><td colspan="5">No hay sitios V12 en este servidor.</td></tr>' }
+		h = h + '</tbody></table></div></section>'
+
+		tr = sit.trabajos("empresa")
+		if tr != "" { h = h + '<section class="tarjeta"><h2>Altas de empresa</h2>' + tr + '</section>' }
+
+		f = '<div class="rejilla2">' + adm.campo("Host", "host", "", "text", "Por ejemplo almacen.local") + adm.campo("Base de datos", "base", "", "text", "Por ejemplo v12_almacen (letras, números y _)") + '</div>'
+		f = f + adm.campo("Paquetes de V12", "packs", adm.cfg("v12/paquetes", "core-erp"), "text", "Nombre del catálogo de la distribución (por ejemplo maxicomercio.mx) o lista de paquetes separados por coma")
+		f = f + '<label class="check"><input type="checkbox" name="hosts" value="1" checked>Agregar al archivo hosts de este equipo</label>'
+		f = f + '<p class="tenue">Se crea la base, se crea el sitio, se conecta a la base y se instala V12. Tarda unos minutos; el avance se ve arriba. Luego asígnele usuarios en el portal y pulse «Refrescar ahora» en Licencia.</p>'
+		f = f + '<div>' + adm.boton("Crear e instalar", "pri") + '</div>'
+		h = h + '<section class="tarjeta form" id="nueva"><h2>Nueva empresa</h2>' + adm.form("sit_nueva", f, "") + '</section>'
+
+		if opts != ""
+		{
+			f = '<div class="rejilla2"><label class="campo">Sitio<select name="host">' + opts + '</select></label>' + adm.campo("Alias", "alias", "", "text", "Por ejemplo pos.local (caja, kiosco)") + '</div>'
+			f = f + '<label class="check"><input type="checkbox" name="hosts" value="1" checked>Agregar al archivo hosts de este equipo</label>'
+			f = f + '<p class="tenue">El alias atiende el mismo sitio y la misma base. Para que cuente en la licencia, agréguelo también como alias del host en el reparto del portal.</p>'
+			f = f + '<div>' + adm.boton("Agregar alias", "pri") + '</div>'
+			h = h + '<section class="tarjeta form"><h2>Agregar alias</h2>' + adm.form("sit_alias", f, "") + '</section>'
+		}
+		return h
+	}
+
+	acc.sitios::a
+	{
+		if a == "sit_nueva"
+		{
+			host = tolower(adm.post("host"))
+			base = tolower(adm.post("base"))
+			packs = tolower(replace(adm.post("packs"), " ", ""))
+			if not(adm.es_host(host)) { do rise_error(0, "El host no es válido: use letras minúsculas, números, puntos y guiones.") }
+			if not(adm.es_nombre(base)) { do rise_error(0, "El nombre de la base no es válido: use letras, números y _.") }
+			if not(sit.es_paquetes(packs)) { do rise_error(0, "La lista de paquetes no es válida.") }
+			if dir.exists(path.concat("web", host)) { do rise_error(0, "Ya existe un sitio para " + host) }
+			qn = base + "@" + @adm_app
+			if dba.cnnexists(qn) { do rise_error(0, "Ya existe la conexión " + qn) }
+			if adm.cfg("db_admin_qn", "") == "" { do rise_error(0, "Falta db_admin_qn en v12admin/v12server.json (conexión con permiso para crear bases).") }
+
+			ref pasos = list.create()
+			new p1
+			{
+				@"tipo": "createdb"
+				@"qn": qn
+				@"base": base
+				@"titulo": "Crear la base " + base
+			}
+			do list.add(pasos, p1)
+			new p15
+			{
+				@"tipo": "deployv12"
+				@"packs": packs
+				@"titulo": "Desplegar los paquetes (" + packs + ") desde " + @adm_from
+			}
+			do list.add(pasos, p15)
+			new p2
+			{
+				@"tipo": "dkl"
+				@"args": "createsite v12 " + host
+				@"titulo": "Crear el sitio " + host
+			}
+			do list.add(pasos, p2)
+			new p3
+			{
+				@"tipo": "dkl"
+				@"args": "connectv12 db=" + qn + " host=" + host
+				@"titulo": "Conectar el sitio a la base"
+			}
+			do list.add(pasos, p3)
+			new p4
+			{
+				@"tipo": "dkl"
+				@"args": "installv12 db=" + qn + " packs=" + packs + " from=" + @adm_from + " cat=" + @adm_cat
+				@"titulo": "Instalar V12 (" + packs + ")"
+				@"timeout_ms": 3600000
+				@"verificar_qn": qn
+			}
+			do list.add(pasos, p4)
+			if adm.post("hosts") == "1"
+			{
+				new p5
+				{
+					@"tipo": "hosts"
+					@"host": host
+					@"titulo": "Agregar " + host + " al archivo hosts"
+				}
+				do list.add(pasos, p5)
+			}
+			new p6
+			{
+				@"tipo": "dkl"
+				@"args": "v12.license -refresh"
+				@"titulo": "Avisar al portal del host nuevo (v12.license -refresh)"
+				@"opcional": 1
+			}
+			do list.add(pasos, p6)
+			id = adm.trabajo("empresa", pasos, "Nueva empresa " + host + " (" + qn + ")")
+			do adm.aviso("ok", "Se inició el alta de " + host + ". El avance se ve en «Altas de empresa».")
+			do adm.bitacora("sitios", "alta de " + host + " (" + qn + ", " + packs + "): trabajo " + id)
+		}
+		else if a == "sit_alias"
+		{
+			host = tolower(adm.post("host"))
+			alias = tolower(adm.post("alias"))
+			if not(adm.es_host(host)) || not(adm.es_host(alias)) { do rise_error(0, "Host o alias no válidos.") }
+			ref sitios = adm.sitios()
+			qn = field.dstr(sitios, host, "")
+			if qn == "" { do rise_error(0, "No hay sitio para " + host) }
+			if dir.exists(path.concat("web", alias)) || field.exist(sitios, alias) { do rise_error(0, alias + " ya es un sitio.") }
+			ref al = adm.alias()
+			if field.exist(al, alias) { do rise_error(0, alias + " ya es alias de " + field.dstr(al, alias, "")) }
+			t = adm.leer(adm.alias_archivo())
+			if t == "" { t = "# Alias de hosts de V12 Server (administrador). Formato: alias=host. Lo lee fastcgi/alias.dkl.\n" }
+			if not(adm.empieza(right(t, 1), "\n")) { t = t + "\n" }
+			do dir.ensure("_config")
+			do file.wtext(adm.alias_archivo(), t + alias + "=" + host + "\n")
+			out = adm.dkl("connectv12 db=" + qn + " host=" + alias)
+			msg = "Alias " + alias + " → " + host + ".\n" + trim(out)
+			if adm.post("hosts") == "1"
+			{
+				if adm.hosts_agregar(alias) { msg = msg + "\nAgregado al archivo hosts." }
+			}
+			do adm.aviso("ok", msg)
+			do adm.bitacora("sitios", "alias " + alias + " -> " + host)
+		}
+		return "sitios"
+	}
+}

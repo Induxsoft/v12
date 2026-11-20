@@ -1,0 +1,268 @@
+#!
+module "Administrador de V12 Server - Servidor web"
+{
+	// Sección Servidor web (SPEC §13): puertos y certificado del servidor web de V12.
+	// Modo dklwebsvr: edita su dklwebsvr.conn.json (listen, redirect_http_to_https, tls), lo valida con
+	// "dklwebsvr -test" (si falla, deja el anterior) y reinicia su servicio. El administrador tiene su propia
+	// instancia de dklwebsvr (solo 127.0.0.1), así que cambiar aquí no lo desconecta.
+	// Modo iis: solo muestra los enlaces del sitio de IIS (script admin-iis) y permite reciclar.
+	// Certificados: autofirmado (dklwebsvr -self-signed), .pfx (v12server.exe --pfx2pem, Windows) o
+	// Let's Encrypt (tls.acme de dklwebsvr; requiere dominio público con 80 y 443 abiertos).
+
+	web.conf_archivo::
+	{
+		return adm.cfg("servidor_web/conf", "")
+	}
+
+	web.conf::
+	{
+		f = web.conf_archivo()
+		if f == "" || not(file.exists(f)) { return record.create() }
+		return from.json(file.rtext(f))
+		exception { return record.create() }
+	}
+
+	web.certs_dir::&c
+	{
+		d = field.dstr(c, "tls/certs_dir", "certs")
+		if not(adm.empieza(d, "/")) && not(contains(d, ":")) { d = path.concat(dir.name(web.conf_archivo()), d) }
+		return d
+	}
+
+	// Puertos de listen: {http, https}
+	web.puertos::&c
+	{
+		ref r = record.create()
+		r<"http">: ""
+		r<"https">: ""
+		ref ls = field.dobj(c, "listen", list.create())
+		for i=0; i<list.count(ls)
+		{
+			ref l = list.obj(ls, i)
+			ref ps = split(field.dstr(l, "address", ""), ":")
+			pto = list.str(ps, list.count(ps) - 1)
+			if field.parse.dbool(l, "tls", 0) { r<"https">: pto }
+			else { r<"http">: pto }
+		}
+		return r
+	}
+
+	// Todos los hosts que sirve este servidor (sitios + alias), para el certificado
+	web.todos_hosts::
+	{
+		s = ""
+		ref st = adm.sitios()
+		ref ks = list.create_from_fields(st)
+		for i=0; i<list.count(ks)
+		{
+			s = s + ifstr(s == "", "", ",") + list.str(ks, i)
+		}
+		ref al = adm.alias()
+		ref ka = list.create_from_fields(al)
+		for i=0; i<list.count(ka)
+		{
+			if not(field.exist(st, list.str(ka, i))) { s = s + ifstr(s == "", "", ",") + list.str(ka, i) }
+		}
+		return s
+	}
+
+	// to.json escribe los booleanos nuevos como 1/0 y dklwebsvr exige true/false (campos tipados)
+	web.json::&c
+	{
+		j = to.json(c)
+		j = replace(replace(j, '"tls":1', '"tls":true'), '"tls":0', '"tls":false')
+		j = replace(replace(j, '"redirect_http_to_https":1', '"redirect_http_to_https":true'), '"redirect_http_to_https":0', '"redirect_http_to_https":false')
+		j = replace(j, '"accept_tos":1', '"accept_tos":true')
+		return j
+	}
+
+	// Versión de la distribución (manifest.json de la raíz de Devkron): dklversion() da la del motor, que en 2.0.5.1
+	// sigue siendo 2.0.5.0 porque solo cambió dklwebsvr
+	web.devkron_version::
+	{
+		if file.exists("manifest.json")
+		{
+			ref m = from.json(file.rtext("manifest.json"))
+			v = field.dstr(m, "version", "")
+			if v != "" { return v }
+		}
+		return dklversion()
+		exception { return dklversion() }
+	}
+
+	sec.servidor::
+	{
+		modo = adm.cfg("servidor_web/modo", "dklwebsvr")
+		h = adm.titulo("Servidor web", "Al guardar se reinicia el servidor web: las sesiones abiertas se conservan.", "")
+		dk = ifstr(file.exists("devkron.license"), "Instalada (la trae v12.license)", "Modo demostración")
+		if modo == "iis"
+		{
+			ref r = adm.script("iis", "-Accion enlaces -Sitio \"" + adm.cfg("servidor_web/iis_sitio", "V12 Server") + "\"")
+			h = h + '<section class="tarjeta form"><div class="rejilla3">' + adm.kv("Forma de instalación", "IIS con iis2dkl", "") + adm.kv("Devkron", web.devkron_version(), "") + adm.kv("Licencia de Devkron", dk, "") + '</div>'
+			h = h + '<p>Sitio de IIS «' + adm.h(adm.cfg("servidor_web/iis_sitio", "V12 Server")) + '», grupo de aplicaciones «' + adm.h(adm.cfg("servidor_web/iis_apppool", "V12Server")) + '». Los puertos y certificados se cambian en el Administrador de IIS (enlaces del sitio).</p>'
+			h = h + '<pre class="consola">' + adm.h(field.dstr(r, "enlaces", field.dstr(r, "_salida", ""))) + '</pre>'
+			h = h + adm.form("web_reiniciar", adm.boton("Reciclar IIS y reiniciar Devkron", "pri"), "") + '</section>'
+			return h
+		}
+		ref c = web.conf()
+		ref pt = web.puertos(c)
+		cert = adm.cfg("servidor_web/certificado", "autofirmado")
+		h = h + '<section class="tarjeta form">'
+		h = h + '<div class="rejilla3">' + adm.kv("Forma de instalación", "dklwebsvr (servicio)", "") + adm.kv("Devkron", web.devkron_version(), "") + adm.kv("Licencia de Devkron", dk, "") + '</div>'
+		if (field.dstr(pt, "http", "80") != "80" && field.dstr(pt, "http", "") != "") || (field.dstr(pt, "https", "443") != "443" && field.dstr(pt, "https", "") != "")
+		{
+			h = h + '<p class="aviso-txt">Puertos distintos de 80 y 443: los usuarios entran con el puerto en la dirección (https://erp.local:8443). v12.license los informa al activar y al refrescar para que la licencia de Devkron los incluya.</p>'
+		}
+		f = '<div class="rejilla2">' + adm.campo("Puerto HTTP", "http", field.dstr(pt, "http", "80"), "text", "") + adm.campo("Puerto HTTPS", "https", field.dstr(pt, "https", "443"), "text", "") + '</div>'
+		f = f + '<label class="campo">Certificado HTTPS<select name="cert" id="sel-cert"><option value="autofirmado"' + ifstr(cert == "autofirmado", " selected", "") + '>Autofirmado (red local)</option><option value="pfx"' + ifstr(cert == "pfx", " selected", "") + '>Archivo .pfx</option><option value="letsencrypt"' + ifstr(cert == "letsencrypt", " selected", "") + '>Let&#39;s Encrypt (dominio público)</option></select></label>'
+		f = f + '<div class="rejilla2" data-cert="pfx">' + adm.campo("Ruta del .pfx en este servidor", "pfx", "", "text", "Por ejemplo C:\\certificados\\erp.pfx") + adm.campo("Contraseña del .pfx", "pfx_pwd", "", "password", "No se guarda") + '</div>'
+		f = f + '<div data-cert="letsencrypt">' + adm.campo("Correo para Let's Encrypt", "email", field.dstr(c, "tls/acme/email", ""), "email", "Los hosts del certificado son los sitios V12 (deben ser dominios públicos)") + '</div>'
+		f = f + '<label class="check"><input type="checkbox" name="redirigir" value="1"' + ifstr(field.parse.dbool(c, "redirect_http_to_https", 0), " checked", "") + '>Redirigir HTTP a HTTPS</label>'
+		f = f + '<div class="botones"><a class="btn sec" href="./?s=certificado">Descargar certificado para los equipos</a>' + adm.boton("Guardar y reiniciar", "pri") + '</div>'
+		h = h + adm.form("web_guardar", f, "") + '</section>'
+		h = h + web.otras_instancias()
+		return h
+	}
+
+	// Instancias de dklwebsvr de los sitios con puertos propios (dklwebsvr-<http>-<https>.conn.json, las crea el
+	// instalador desde "puertos_sitio"). Aquí solo se muestran: el formulario de arriba cambia la principal.
+	web.otras_instancias::
+	{
+		f = web.conf_archivo()
+		if f == "" { return "" }
+		ref fs = list.files(dir.name(f), "dklwebsvr-*.conn.json")
+		if list.count(fs) == 0 { return "" }
+		t = ""
+		d = dir.name(f)
+		for i=0; i<list.count(fs)
+		{
+			ref c = from.json(file.rtext(list.str(fs, i)))
+			ref pt = web.puertos(c)
+			n = trim(replace(list.str(fs, i), d, ""))
+			if adm.empieza(n, "/") || adm.empieza(n, "\\") { n = left(n, 1) }
+			t = t + '<li>' + adm.h(n) + ': HTTP ' + adm.h(field.dstr(pt, "http", "")) + ', HTTPS ' + adm.h(field.dstr(pt, "https", "")) + '</li>'
+		}
+		return '<section class="tarjeta"><h3>Sitios con puertos propios</h3><p>Cada par de puertos es otro servicio de dklwebsvr (V12Server.Web-&lt;http&gt;-&lt;https&gt;, en Servicios). Se definen al instalar («Sitios con otros puertos»).</p><ul>' + t + '</ul></section>'
+		exception { return "" }
+	}
+
+	web.descargar_certificado::
+	{
+		ref c = web.conf()
+		d = web.certs_dir(c)
+		archivo = ""
+		if dir.exists(d)
+		{
+			ref fs = list.files(d, "*.crt")
+			if list.count(fs) == 0 { ref fs = list.files(d, "*.pem") }
+			for i=0; i<list.count(fs)
+			{
+				if archivo == "" && not(contains(tolower(list.str(fs, i)), "privkey")) { archivo = list.str(fs, i) }
+			}
+		}
+		if archivo == ""
+		{
+			do adm.aviso("aviso", "No hay certificado en " + d)
+			do adm.redirigir("./?s=servidor")
+			return 0
+		}
+		@http_context<"response/headers/content-type">: "application/x-x509-ca-cert"
+		@http_context<"response/headers/content-disposition">: 'attachment; filename="v12server.crt"'
+		@http_context<"response/output">: "binary"
+		@http_context<"response/binary*">: file.rbytes(archivo)
+	}
+
+	acc.servidor::a
+	{
+		if a == "web_reiniciar"
+		{
+			msg = svc.accion(adm.cfg("servidor_web/servicio", "web"), "reiniciar")
+			msg = msg + "\n" + svc.accion("devkron", "reiniciar")
+			do adm.aviso("ok", msg)
+			return "servidor"
+		}
+		http = adm.post("http")
+		https = adm.post("https")
+		cert = adm.post("cert")
+		if not(adm.es_numero(http)) || not(adm.es_numero(https)) { do rise_error(0, "Los puertos no son válidos.") }
+		if http == https { do rise_error(0, "Los puertos HTTP y HTTPS deben ser distintos.") }
+		pa = adm.cfg("admin/puerto", "8743")
+		if http == pa || https == pa { do rise_error(0, "Ese puerto lo usa el administrador.") }
+		if not(isanyword(cert, "autofirmado,pfx,letsencrypt")) { do rise_error(0, "Certificado no válido.") }
+		f = web.conf_archivo()
+		if f == "" || not(file.exists(f)) { do rise_error(0, "No se encontró la configuración de dklwebsvr (servidor_web/conf).") }
+		anterior = file.rtext(f)
+		ref c = from.json(anterior)
+		exe = adm.cfg("servidor_web/exe", "")
+		msg = ""
+
+		ref ls = list.create()
+		new l1
+		{
+			@"address": "0.0.0.0:" + http
+		}
+		do list.add(ls, l1)
+		new l2
+		{
+			@"address": "0.0.0.0:" + https
+			@"tls": @true
+		}
+		do list.add(ls, l2)
+		c<"listen*">: ls
+		c<"redirect_http_to_https">: ifstr(adm.post("redirigir") == "1", "1", "0") == "1"
+		ref tls = field.dobj(c, "tls", record.create())
+		if not(field.exist(tls, "certs_dir")) { tls<"certs_dir">: "certs" }
+		if not(field.exist(tls, "min_version")) { tls<"min_version">: "1.2" }
+		do field.remove(tls, "acme")
+		d = web.certs_dir(c)
+		do dir.ensure(d)
+
+		if cert == "letsencrypt"
+		{
+			email = adm.post("email")
+			if not(contains(email, "@")) || contains(email, "\"") { do rise_error(0, "Escriba un correo válido para Let's Encrypt.") }
+			ref hl = split(web.todos_hosts(), ",")
+			new acme
+			{
+				@"email": email
+				@"accept_tos": @true
+				@"cache_dir": "acme"
+			}
+			acme<"hosts*">: hl
+			tls<"acme*">: acme
+		}
+		c<"tls*">: tls
+		do file.wtext(f, web.json(c))
+
+		if cert == "autofirmado"
+		{
+			hs = web.todos_hosts()
+			hs = ifstr(hs == "", "", hs + ",") + "localhost,127.0.0.1," + adm._machine()
+			msg = msg + trim(adm.exec(exe, "-self-signed=" + hs + " -c=" + f)) + "\n"
+		}
+		else if cert == "pfx"
+		{
+			pfx = adm.post("pfx")
+			if pfx == "" || not(file.exists(pfx)) { do rise_error(0, "No existe el archivo .pfx: " + pfx) }
+			if not(@adm_win) { do rise_error(0, "La conversión de .pfx solo está disponible en Windows (v12server.exe --pfx2pem).") }
+			// La contraseña va en un archivo temporal que borra v12server.exe; no queda en la línea de comando
+			pf = path.concat(adm._cwd(), path.concat(@adm_datos, "pfx-" + adm.sello() + ".tmp"))
+			do file.wtext(pf, field.dstr(@http_context, "request/post/pfx_pwd", ""))
+			msg = msg + trim(adm.exec(adm.cfg("v12server_exe", ""), "--pfx2pem \"" + pfx + "\" \"" + d + "\" \"" + pf + "\"")) + "\n"
+			if file.exists(pf) { do file.delete(pf) }
+		}
+
+		prueba = adm.exec(exe, "-test -c=" + f)
+		if contains(prueba, "con errores") && cert != "letsencrypt"
+		{
+			do file.wtext(f, anterior)
+			do rise_error(0, "dklwebsvr rechazó la configuración; se dejó la anterior.\n" + prueba)
+		}
+		@adm_cfg<"servidor_web/certificado">: cert
+		do file.wtext(path.concat(@adm_dir, "v12server.json"), to.json(@adm_cfg))
+		msg = msg + svc.accion(adm.cfg("servidor_web/servicio", "web"), "reiniciar")
+		do adm.aviso("ok", "Servidor web guardado (HTTP " + http + ", HTTPS " + https + ", certificado " + cert + ").\n" + trim(msg) + "\n\n" + adm.cola(prueba, 15))
+		do adm.bitacora("servidor", "puertos " + http + "/" + https + ", certificado " + cert)
+		return "servidor"
+	}
+}

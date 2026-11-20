@@ -1,0 +1,310 @@
+#!
+module "Administrador de V12 Server - Licencia"
+{
+	// Sección Licencia (SPEC §5.2-§5.4, §6.3): estado, reparto, refrescar, solicitud sin conexión, importar y
+	// sesiones abiertas. Las operaciones de licencia las hace el comando v12.license (proceso aparte, salida
+	// V12LIC_RC=<n>); las sesiones, la extensión induxsoft.license (lic.v12_sesiones / lic.v12_cerrar_sesion).
+
+	alic.es_codigo::c
+	{
+		if length(c) < 8 || length(c) > 64 { return @false }
+		for i=0; i<length(c)
+		{
+			if not(containschar(substring(c, i, 1), "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-")) { return @false }
+		}
+		return @true
+	}
+
+	alic.es_guid::g
+	{
+		if length(g) < 16 || length(g) > 40 { return @false }
+		for i=0; i<length(g)
+		{
+			if not(containschar(substring(g, i, 1), "abcdefABCDEF0123456789-")) { return @false }
+		}
+		return @true
+	}
+
+	// AAAA-MM-DD[THH:MM:SS] -> AAAAMMDD.HHMMSS (0 si viene vacía)
+	alic.num::iso
+	{
+		t = trim(iso)
+		if t == "" { return 0 }
+		t = replace(replace(replace(replace(t, "-", ""), ":", ""), "T", "."), " ", ".")
+		return parse.num(t)
+		exception { return 0 }
+	}
+
+	// Salida de v12.license sin la línea V12LIC_RC y con su código
+	alic.salida::out
+	{
+		ref r = record.create()
+		p = findstr(out, "V12LIC_RC=")
+		rc = -1
+		texto = out
+		if p >= 0
+		{
+			rc = parse.num(trim(list.str(split(replace(left(out, p + 10), "\r", ""), "\n"), 0)))
+			texto = trim(lremove(out, p))
+		}
+		r<"rc">: rc
+		r<"texto">: texto
+		return r
+	}
+
+	alic.correr::args, titulo
+	{
+		ref r = alic.salida(adm.dkl("v12.license " + args))
+		rc = field.dnum(r, "rc", -1)
+		tipo = "ok"
+		if rc == 2 || rc == 4 { tipo = "aviso" }
+		else if rc != 0 { tipo = "error" }
+		do adm.aviso(tipo, titulo + " (V12LIC_RC=" + str(rc) + ")\n\n" + field.dstr(r, "texto", ""))
+		do adm.bitacora("licencia", titulo + ": V12LIC_RC=" + str(rc))
+	}
+
+	// Paquetes de un host como texto
+	alic.paquetes::&o
+	{
+		pq = ""
+		ref pk = field.dobj(o, "paquetes", list.create())
+		for j=0; j<list.count(pk)
+		{
+			ref q = list.obj(pk, j)
+			pq = pq + ifstr(pq == "", "", ", ") + field.dstr(q, "id", "") + ifstr(field.dnum(q, "cantidad", 0) > 1, " ×" + str(field.dnum(q, "cantidad", 0)), "")
+		}
+		return pq
+	}
+
+	alic.cantidad::&o, id
+	{
+		ref pk = field.dobj(o, "paquetes", list.create())
+		for j=0; j<list.count(pk)
+		{
+			ref q = list.obj(pk, j)
+			if tolower(field.dstr(q, "id", "")) == id { return field.dnum(q, "cantidad", 0) }
+		}
+		return 0
+	}
+
+	// Sesiones abiertas de un host (lista) o null si no se pudo
+	alic.sesiones::qn
+	{
+		// La conexión se cierra siempre: si lic.v12_sesiones falla (por ejemplo, sin la extensión real) y no se
+		// cerrara, cada vista dejaría una conexión abierta hasta agotar el pool y colgar las páginas.
+		if qn == "" { return @null }
+		ref db = dbr.open(qn)
+		ok = @false
+		ref l = list.create()
+		codeblock
+		{
+			ref l = lic.v12_sesiones(db)
+			ok = @true
+			exception { ok = @false }
+		}
+		do dbr.close(db)
+		if not(ok) { return @null }
+		return l
+		exception { return @null }
+	}
+
+	sec.licencia::
+	{
+		carpeta = adm.lic_folder()
+		ref p = adm.lic()
+		ref sitios = adm.sitios()
+		ref est = record.create()
+		codeblock
+		{
+			if file.exists(path.concat(carpeta, "v12.estado.json")) { ref est = from.json(file.rtext(path.concat(carpeta, "v12.estado.json"))) }
+			exception { }
+		}
+		revocada = file.exists(path.concat(carpeta, "v12.revocada"))
+		did = ""
+		codeblock
+		{
+			did = lic.did()
+			exception { did = "(no se pudo leer: " + last_error() + ")" }
+		}
+
+		b = adm.form("lic_request", adm.boton("Solicitud sin conexión", "sec"), 'class="enlinea"')
+		b = b + '<a class="btn sec" href="#importar">Importar archivo</a>'
+		b = b + adm.form("lic_refresh", adm.boton("Refrescar ahora", "pri"), 'class="enlinea"')
+		h = adm.titulo("Licencia", "Se refresca sola cada hora si hay internet. El reparto se cambia en el portal.", b)
+
+		estado = "Sin licencia"
+		ce = "mal"
+		plan = "—"
+		vence = "—"
+		codigo = field.dstr(est, "codigo", "—")
+		usuarios = 0
+		nhosts = 0
+		if not(isnull(p))
+		{
+			estado = "Activa"
+			ce = "bien"
+			vn = alic.num(field.dstr(p, "vence", ""))
+			if field.dstr(p, "did", "") != did
+			{
+				estado = "De otro equipo"
+				ce = "mal"
+			}
+			else if vn > 0 && vn < ndatetime.now()
+			{
+				estado = "Vencida"
+				ce = "mal"
+			}
+			plan = field.dstr(p, "producto_nombre", field.dstr(p, "productName", "V12 On Premise"))
+			if field.dstr(p, "modalidad", "") != "" { plan = plan + " · " + field.dstr(p, "modalidad", "") }
+			vence = adm.corta(field.dstr(p, "vence", "—"), 10)
+			if field.dstr(p, "modalidad", "") == "perpetua" && field.dstr(p, "actualizaciones_hasta", "") != "" { vence = "Perpetua (actualizaciones hasta " + adm.corta(field.dstr(p, "actualizaciones_hasta", ""), 10) + ")" }
+			codigo = field.dstr(p, "codigo", codigo)
+			ref hs0 = field.dobj(p, "hosts", record.create())
+			ref ks0 = list.create_from_fields(hs0)
+			for i=0; i<list.count(ks0)
+			{
+				ref o0 = field.dobj(hs0, list.str(ks0, i), record.create())
+				usuarios = usuarios + field.dnum(o0, "usuarios", 0)
+				nhosts = nhosts + 1 + list.count(field.dobj(o0, "alias", list.create()))
+			}
+		}
+		if revocada
+		{
+			estado = "Revocada"
+			ce = "mal"
+		}
+		dk = "Modo demostración (sin devkron.license)"
+		if file.exists("devkron.license") { dk = ifstr(nhosts > 0, "Incluida · " + str(nhosts) + ifstr(nhosts == 1, " host", " hosts"), "Instalada") }
+
+		h = h + '<section class="tarjeta rejilla4">'
+		h = h + adm.kv("Estado", estado, ce) + adm.kv("Plan", plan, "") + adm.kv("Vence", vence, "") + adm.kv("Último refresco", replace(field.dstr(est, "ultimo_refresco", "nunca"), "T", " "), "")
+		h = h + adm.kv("Código", codigo, "mono") + adm.kv("DID de este equipo", did, "mono") + adm.kv("Licencia de Devkron", dk, "") + adm.kv("Usuarios repartidos", str(usuarios), "")
+		h = h + '</section>'
+
+		if revocada
+		{
+			h = h + '<section class="tarjeta"><h2>Licencia revocada</h2><pre class="consola">' + adm.h(adm.leer(path.concat(carpeta, "v12.revocada"))) + '</pre><p>V12 no inicia sesiones en este servidor. Si ya se corrigió en el portal (renovación, reactivación), pulse «Refrescar ahora».</p></section>'
+		}
+
+		if isnull(p)
+		{
+			opts = '<option value="">(no asignar)</option>'
+			ref ksit = list.create_from_fields(sitios)
+			for i=0; i<list.count(ksit)
+			{
+				opts = opts + '<option value="' + adm.h(list.str(ksit, i)) + '">' + adm.h(list.str(ksit, i)) + '</option>'
+			}
+			f = '<div class="rejilla2">' + adm.campo("Código de contratación", "codigo", "", "text", "El que recibió al comprar su plan V12 On Premise") + '<label class="campo">Si no hay reparto en el portal, asignar todo a<select name="host">' + opts + '</select></label></div>'
+			f = f + '<div>' + adm.boton("Activar en este equipo", "pri") + '</div>'
+			h = h + '<section class="tarjeta form"><h2>Activar la licencia</h2><p>Este servidor no tiene licencia de V12: V12 no inicia sesiones hasta activarla. Sin internet, use «Solicitud sin conexión» y después «Importar archivo».</p>' + adm.form("lic_activar", f, "") + '</section>'
+		}
+		else
+		{
+			h = h + '<section class="tarjeta"><div class="titulo2"><h2>Reparto por host</h2><a href="https://portal.induxsoft.net/" target="_blank" rel="noopener">Cambiar en portal.induxsoft.net</a></div>'
+			h = h + '<div class="tabla"><table><thead><tr><th>Host</th><th>Alias</th><th>Usuarios</th><th>Sesiones abiertas</th><th>Cajas</th><th>Paquetes</th></tr></thead><tbody>'
+			ref hs = field.dobj(p, "hosts", record.create())
+			ref ks = list.create_from_fields(hs)
+			if list.count(ks) == 0 { h = h + '<tr><td colspan="6">Sin reparto: configúrelo en el portal (V12 On Premise) y pulse «Refrescar ahora».</td></tr>' }
+			for i=0; i<list.count(ks)
+			{
+				host = list.str(ks, i)
+				ref o = field.dobj(hs, host, record.create())
+				al = ""
+				ref la = field.dobj(o, "alias", list.create())
+				for j=0; j<list.count(la)
+				{
+					al = al + ifstr(al == "", "", ", ") + list.str(la, j)
+				}
+				u = field.dnum(o, "usuarios", 0)
+				ses = "—"
+				ref l = alic.sesiones(field.dstr(sitios, host, ""))
+				if not(isnull(l))
+				{
+					ses = str(list.count(l))
+					if list.count(l) >= u { ses = ses + ' <span class="aviso-txt">(lleno)</span>' }
+				}
+				else if not(field.exist(sitios, host)) { ses = '<span class="tenue">sin sitio aquí</span>' }
+				h = h + '<tr><td class="fuerte">' + adm.h(host) + '</td><td class="tenue">' + adm.h(ifstr(al == "", "—", al)) + '</td><td>' + str(u) + '</td><td>' + ses + '</td><td>' + str(alic.cantidad(o, "maxipos")) + '</td><td class="tenue">' + adm.h(alic.paquetes(o)) + '</td></tr>'
+			}
+			h = h + '</tbody></table></div></section>'
+		}
+
+		// Sesiones abiertas por sitio local
+		ref kss = list.create_from_fields(sitios)
+		for i=0; i<list.count(kss)
+		{
+			host = list.str(kss, i)
+			qn = field.dstr(sitios, host, "")
+			ref l = alic.sesiones(qn)
+			if not(isnull(l))
+			{
+				if list.count(l) > 0
+				{
+					h = h + '<section class="tarjeta"><h2>Sesiones abiertas · ' + adm.h(host) + '</h2><p class="tenue">Cierra una sesión olvidada para liberar el lugar.</p>'
+					h = h + '<div class="tabla"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Inició</th><th>Equipo</th><th><span class="oculto">Acción</span></th></tr></thead><tbody>'
+					for j=0; j<list.count(l)
+					{
+						ref s = list.obj(l, j)
+						ip = field.dstr(s, "clientinfo", "")
+						if ip == "Unknow" { ip = "" }
+						cerrar = adm.form("lic_cerrar", '<input type="hidden" name="host" value="' + adm.h(host) + '"><input type="hidden" name="guid" value="' + adm.h(field.dstr(s, "sys_guid", "")) + '">' + adm.boton("Cerrar sesión", "sec chico"), 'class="enlinea" onsubmit="return confirm(\'¿Cerrar esta sesión?\');"')
+						h = h + '<tr><td>' + adm.h(field.dstr(s, "userId", "")) + '</td><td>' + adm.h(field.dstr(s, "userName", "")) + '</td><td>' + adm.h(field.dstr(s, "sys_dtcreated", "")) + '</td><td class="tenue">' + adm.h(ip) + '</td><td class="der">' + cerrar + '</td></tr>'
+					}
+					h = h + '</tbody></table></div></section>'
+				}
+			}
+		}
+
+		// Importar
+		f = '<label class="campo">Archivo descargado del portal<input type="file" id="archivo-lic" accept=".lic,.json,.txt"></label>'
+		f = f + '<label class="campo">o pegue aquí su contenido<textarea name="contenido" id="contenido-lic" rows="5" spellcheck="false"></textarea></label>'
+		f = f + '<div>' + adm.boton("Instalar la licencia", "pri") + '</div>'
+		h = h + '<section class="tarjeta form" id="importar"><h2>Importar archivo de licencia (sin conexión)</h2><p class="tenue">1) «Solicitud sin conexión» muestra el código de solicitud. 2) En portal.induxsoft.net, V12 On Premise › Activar sin conexión, capture ese código y descargue el archivo. 3) Instálelo aquí.</p>' + adm.form("lic_importar", f, "") + '</section>'
+		return h
+	}
+
+	acc.licencia::a
+	{
+		if a == "lic_refresh" { do alic.correr("-refresh", "Refrescar licencia") }
+		else if a == "lic_request" { do alic.correr("-request", "Código de solicitud para activar sin conexión") }
+		else if a == "lic_activar"
+		{
+			codigo = adm.post("codigo")
+			host = tolower(adm.post("host"))
+			if not(alic.es_codigo(codigo)) { do rise_error(0, "El código de contratación no es válido.") }
+			if host != "" && not(adm.es_host(host)) { do rise_error(0, "El host no es válido.") }
+			do alic.correr(codigo + ifstr(host != "", " -host " + host, ""), "Activar licencia")
+		}
+		else if a == "lic_importar"
+		{
+			t = adm.post("contenido")
+			if t == "" { do rise_error(0, "Elija el archivo o pegue su contenido.") }
+			f = path.concat(adm._cwd(), path.concat(@adm_datos, "importar-" + adm.sello() + ".txt"))
+			do file.wtext(f, t)
+			do alic.correr("-import \"" + f + "\"", "Importar licencia")
+			do file.delete(f)
+		}
+		else if a == "lic_cerrar"
+		{
+			host = tolower(adm.post("host"))
+			guid = adm.post("guid")
+			if not(adm.es_host(host)) || not(alic.es_guid(guid)) { do rise_error(0, "Datos no válidos.") }
+			ref sitios = adm.sitios()
+			qn = field.dstr(sitios, host, "")
+			if qn == "" { do rise_error(0, "No hay sitio para " + host) }
+			ref db = dbr.open(qn)
+			n = 0
+			err = ""
+			codeblock
+			{
+				n = lic.v12_cerrar_sesion(db, guid)
+				exception { err = last_error() }
+			}
+			do dbr.close(db)
+			if err != "" { do rise_error(0, err) }
+			do adm.aviso(ifstr(n > 0, "ok", "aviso"), ifstr(n > 0, "Sesión cerrada en " + host + ".", "La sesión ya estaba cerrada."))
+			do adm.bitacora("licencia", "sesión " + guid + " de " + host + " cerrada desde el administrador (" + str(n) + ")")
+		}
+		return "licencia"
+	}
+}

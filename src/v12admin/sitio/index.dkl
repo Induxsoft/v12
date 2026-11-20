@@ -1,0 +1,12 @@
+#include "dkli.dkh"
+#!
+program "v12admin - raíz"
+{
+	// https://v12admin.localhost:<puerto>/ -> /admin/ (estado explícito: detrás de dklwebsvr 1.1.0 un Location
+	// sin Status llega como 200, ver README del instalador)
+	#include "functions.dkh"
+	@http_context<"response/http_status">: 302
+	@http_context<"response/headers/location">: "/admin/"
+	@http_context<"response/output">: "text"
+	@http_context<"response/text">: ""
+}
