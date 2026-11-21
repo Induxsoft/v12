@@ -63,14 +63,54 @@ program "v12admin - trabajo en segundo plano"
 		exception { return -1 }
 	}
 
+	// dkl <args> con la salida redirigida a un archivo temporal; devuelve {rc, salida}.
+	// exec(prog, args, @true) de Devkron 2 espera a que el proceso termine antes de leer su salida (devkron2
+	// src/Devkron.Functions/OS.cs:76-89): con más de 64 KB (installv12 de varios paquetes) el hijo se bloquea escribiendo
+	// en la tubería y el trabajo se cuelga. Por eso el comando va en un guion (sh en Linux, .cmd en Windows) que manda
+	// stdout y stderr a un archivo y solo imprime TRB_RC=<código de salida>; luego se lee el archivo.
+	trb.ejecuta_dkl::args
+	{
+		ref r = record.create()
+		base = file.temp("")
+		sal = base + ".out"
+		if @trb_win
+		{
+			scr = base + ".cmd"
+			do file.wtext(scr, "@echo off\r\n\"" + @trb_dkl + "\" " + replace(args, "%", "%%") + " -hide-log > \"" + sal + "\" 2>&1 < NUL\r\necho TRB_RC=%ERRORLEVEL%\r\n")
+			out = exec("cmd.exe", "/d /c \"" + scr + "\"", @true)
+		}
+		else
+		{
+			scr = base + ".sh"
+			do file.wtext(scr, "'" + @trb_dkl + "' " + args + " -hide-log > '" + sal + "' 2>&1 < /dev/null\necho TRB_RC=$?\n")
+			out = exec("/bin/sh", "\"" + scr + "\"", @true)
+		}
+		salida = ""
+		if file.exists(sal)
+		{
+			salida = file.rtext(sal)
+			do file.delete(sal)
+		}
+		if file.exists(scr) { do file.delete(scr) }
+		rc = -1
+		p = findstr(out, "TRB_RC=")
+		if p >= 0 { rc = parse.num(trim(list.str(split(replace(left(out, p + 7), "\r", ""), "\n"), 0))) }
+		r<"rc">: rc
+		r<"salida">: salida
+		return r
+	}
+
 	trb.paso_dkl::&p
 	{
 		args = field.dstr(p, "args", "")
 		@exec_timeout = field.dnum(p, "timeout_ms", 1800000)
 		do trb.log("$ dkl " + args)
-		out = exec(@trb_dkl, args + " -hide-log", @true)
+		ref x = trb.ejecuta_dkl(args)
+		out = field.dstr(x, "salida", "")
+		rc = field.dnum(x, "rc", -1)
 		do trb.log(trim(out))
-		// Errores que imprimen las herramientas de V12 y de Devkron sin código de salida (exec no lo da)
+		do trb.log("(código de salida: " + str(rc) + ")")
+		// Errores que imprimen las herramientas de V12 y de Devkron sin código de salida (dkl casi siempre termina en 0)
 		lo = tolower(out)
 		if contains(lo, "error:") || contains(lo, "-  error -") || contains(lo, "no se pudo") { return 1 }
 		if adm_v12lic_rc(out) > 0 && adm_v12lic_rc(out) != 2 { return 1 }
