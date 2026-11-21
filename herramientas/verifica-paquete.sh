@@ -6,6 +6,9 @@
 #   3. Están los archivos de V12 On Premise: induxsoft.license.dll/.dkh y v12admin/{bin,fastcgi,sitio}.
 #   4. Está dkl.async.dll (biblioteca de Devkron 1.x que la release de Devkron 2 no trae; la usa comandas/lib.dk de
 #      alibeb: sin ella el sitio v12-comandas da 500 en una raíz limpia).
+#   5. Está precfdi4lib.dll (la misma del paquete mxcfdi; comandas/dmcm/app/svc/lib.dk:17 de alibeb la carga sin
+#      condición: sin ella el sitio v12-comandas da 500 fuera de México). Si existe el clon de Induxsoft/mxcfdi junto a
+#      este (o MXCFDI_REPO), avisa si las dos copias difieren: ambos paquetes escriben el mismo archivo en la raíz.
 set -euo pipefail
 S="$(cd "$(dirname "$0")/../src" && pwd)"
 fallas=0
@@ -15,9 +18,14 @@ for f in v12.license.json v12.estado.json v12.revocada v12.lic _device.id devkro
          v12admin/v12server.json v12admin/datos v12admin/dist; do
   [ -e "$S/$f" ] && falla "src/$f es configuración o datos locales: no va en el paquete"
 done
-for f in dkl.async.dll induxsoft.license.dll induxsoft.license.dkh v12admin/bin/trabajo.dkl v12admin/fastcgi/alias.dkl v12admin/sitio/admin/index.dkl; do
+for f in dkl.async.dll precfdi4lib.dll induxsoft.license.dll induxsoft.license.dkh v12admin/bin/trabajo.dkl v12admin/fastcgi/alias.dkl v12admin/sitio/admin/index.dkl; do
   [ -f "$S/$f" ] || falla "falta src/$f"
 done
+MX="${MXCFDI_REPO:-$(cd "$S/../.." && pwd)/mxcfdi}"
+if [ -f "$MX/src/precfdi4lib.dll" ] && [ -f "$S/precfdi4lib.dll" ]; then
+  cmp -s "$MX/src/precfdi4lib.dll" "$S/precfdi4lib.dll" && echo "OK  precfdi4lib.dll = la de $MX" \
+    || falla "precfdi4lib.dll difiere de $MX/src/precfdi4lib.dll: mxcfdi y v12 escriben el mismo archivo en la raíz (iguálelas)"
+fi
 otros=$(cd "$S/v12admin/fastcgi" && ls | grep -vx alias.dkl || true)
 [ -z "$otros" ] || falla "src/v12admin/fastcgi solo debe traer alias.dkl (los demás los copia el instalador de la distribución de Devkron): $otros"
 [ $fallas -eq 0 ] && echo "verifica-paquete: 0 fallas" || { echo "verifica-paquete: $fallas fallas"; exit 1; }
