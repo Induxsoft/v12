@@ -4,6 +4,8 @@
 #      nombres sin punto, así que "./dkl v12.license" lee el archivo sin extensión).
 #   2. src/ no trae configuración local: el zip se extrae sobre la raíz de Devkron y sobrescribiría la del cliente.
 #   3. Están los archivos de V12 On Premise: induxsoft.license.dll/.dkh y v12admin/{bin,fastcgi,sitio}.
+#   4. Está dkl.async.dll (biblioteca de Devkron 1.x que la release de Devkron 2 no trae; la usa comandas/lib.dk de
+#      alibeb: sin ella el sitio v12-comandas da 500 en una raíz limpia).
 set -euo pipefail
 S="$(cd "$(dirname "$0")/../src" && pwd)"
 fallas=0
@@ -13,7 +15,7 @@ for f in v12.license.json v12.estado.json v12.revocada v12.lic _device.id devkro
          v12admin/v12server.json v12admin/datos v12admin/dist; do
   [ -e "$S/$f" ] && falla "src/$f es configuración o datos locales: no va en el paquete"
 done
-for f in induxsoft.license.dll induxsoft.license.dkh v12admin/bin/trabajo.dkl v12admin/fastcgi/alias.dkl v12admin/sitio/admin/index.dkl; do
+for f in dkl.async.dll induxsoft.license.dll induxsoft.license.dkh v12admin/bin/trabajo.dkl v12admin/fastcgi/alias.dkl v12admin/sitio/admin/index.dkl; do
   [ -f "$S/$f" ] || falla "falta src/$f"
 done
 otros=$(cd "$S/v12admin/fastcgi" && ls | grep -vx alias.dkl || true)
